@@ -10,6 +10,7 @@ include_directories(.)
 add_executable(
         ca3dmm
         ca3dmm.cc
+        densematgen.cpp
 )
 
 target_link_libraries(ca3dmm ${MPI_C_LIBRARIES})
