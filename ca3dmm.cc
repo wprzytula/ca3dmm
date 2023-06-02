@@ -8,6 +8,7 @@
 
 constexpr double const l = 0.95;
 
+namespace {
 struct Config
 {
     int n, m, k, p, p_n, p_m, p_k;
@@ -104,6 +105,7 @@ struct Config
 static void usage(char const *progname)
 {
     std::cerr << "Usage: " << progname << " n m k -s seeds [-g ge_value] [-v]\n";
+}
 }
 
 #ifdef TEST
