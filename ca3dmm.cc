@@ -1,8 +1,70 @@
 #include "densematgen.h"
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <unistd.h>
 #include <vector>
+
+constexpr double const l = 0.95;
+
+struct Config
+{
+    int n, m, k, p, p_n, p_m, p_k;
+
+    Config(int const n, int const m, int const k, int const p)
+        : n{n}, m{m}, k{k}, p{p}
+    {
+        // Solve min(p_m*k*n + p_n*m*k + p_k*m*n) with constraints:
+        // (a) l*p ≤ p_m*p_n*p_k ≤ p (l is a constant, e.g. 0.95; this ensures we
+        // use
+        //     as many processors as possible, but not necessarily all processors
+        //     available)
+        // (b) mod(max(p_m, p_n), min(p_m, p_n)) == 0 (this ensures the Cannon
+        // algorithm can be performed). Among admissible, optimal solutions, pick
+        // the one using as many processors as possible, thus maximizing
+        // p_m*p_n*p_k.
+        int opt_p_n = p;
+        int opt_p_m = 1;
+        int opt_p_k = 1;
+        int max_p_prod = opt_p_m * opt_p_n * opt_p_k;
+        int min_sum = opt_p_m * k * n + opt_p_n * m * k + opt_p_k * m * n;
+
+        int const l_p = l * p;
+
+        for (int p_m = 1; p_m < p; ++p_m)
+        {
+            if (p_m * p_m > p)
+                break; // No point in continuing if p_m * p_m exceeds p
+            int const p_div_p_m = p / p_m;
+            for (int p_n = p_m; p_n < p_div_p_m; p_n += p_m)
+            {
+                int const p_k = p / (p_m * p_n);
+                int const p_prod = p_k * p_m * p_n;
+                int const sum = p_m * k * n + p_n * m * k + p_k * m * n;
+                if (l_p <= p_prod && p_prod <= p &&
+                    (sum < min_sum || (sum == min_sum && p_prod > max_p_prod)))
+                {
+                    min_sum = sum;
+                    max_p_prod = p_prod;
+                    opt_p_n = p_n;
+                    opt_p_m = p_m;
+                    opt_p_k = p_k;
+                }
+            }
+        }
+        p_n = opt_p_n;
+        p_m = opt_p_m;
+        p_k = opt_p_k;
+    }
+
+    void print() const
+    {
+        printf("CONFIG: n=%i, m=%i, k=%i, p=%i ---> p_m=%i, p_n=%i, p_k=%i (prod: "
+               "%i, sum: %i)\n",
+               n, m, k, p, p_m, p_n, p_k, p_n * p_m * p_k,
+               p_m * k * n + p_n * m * k + p_k * m * n);
+    }
+};
 
 static void usage(char const *progname)
 {
