@@ -11,10 +11,10 @@ constexpr double const l = 0.95;
 namespace {
 struct Config
 {
-    int n, m, k, p, p_n, p_m, p_k;
+    int n, m, k, p, p_n, p_m, p_k, rank;
 
-    Config(int const n, int const m, int const k, int const p)
-        : n{n}, m{m}, k{k}, p{p}
+    Config(int const n, int const m, int const k, int const p, int const rank)
+        : n{n}, m{m}, k{k}, p{p}, rank{rank}
     {
         // Solve min(p_m*k*n + p_n*m*k + p_k*m*n) with constraints:
         // (a) l*p ≤ p_m*p_n*p_k ≤ p (l is a constant, e.g. 0.95; this ensures we
@@ -112,7 +112,7 @@ static void usage(char const *progname)
 // UNIT TESTS
 int main()
 {
-    Config conf{323, 123, 231, 1023};
+    Config const conf{323, 123, 231, 1023, 0};
     conf.print();
     return 0;
 }
@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
 
     double const ge_value = ge_value_str ? std::stod(ge_value_str) : 0.;
 
-    Config const conf{n, m, k, p};
+    Config const conf{n, m, k, p, rank};
 
     // Print the parsed values
     std::cout << "n: " << n << '\n';
