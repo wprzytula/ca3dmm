@@ -11,7 +11,7 @@ constexpr double const l = 0.95;
 namespace {
 struct Config
 {
-    int n, m, k, p, p_n, p_m, p_k, rank;
+    int n, m, k, p, p_n, p_m, p_k, rank, gidx;
 
     Config(int const n, int const m, int const k, int const p, int const rank)
         : n{n}, m{m}, k{k}, p{p}, rank{rank}
@@ -57,6 +57,7 @@ struct Config
         p_n = opt_p_n;
         p_m = opt_p_m;
         p_k = opt_p_k;
+        gidx = rank % p_k;
     }
 
     void print() const
