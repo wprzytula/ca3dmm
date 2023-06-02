@@ -93,6 +93,16 @@ static void multiply(int const m, int const n, int const k, int const seed_a,
     generate_matrix(k, n, seed_b);
 }
 
+#ifdef TEST
+// UNIT TESTS
+int main()
+{
+    Config conf{323, 123, 231, 1023};
+    conf.print();
+    return 0;
+}
+
+#else
 int main(int argc, char *argv[])
 {
     static char const *const delim = ",";
@@ -170,3 +180,4 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+#endif // TEST
