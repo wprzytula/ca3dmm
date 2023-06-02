@@ -65,33 +65,45 @@ struct Config
                n, m, k, p, p_m, p_n, p_k, p_n * p_m * p_k,
                p_m * k * n + p_n * m * k + p_k * m * n);
     }
+
+    static void generate_matrix(int const i, int const j, int const seed)
+    {
+        for (int r = 0; r < i; r++)
+        {
+            for (int c = 0; c < j; c++)
+            {
+                const double entry = generate_double(seed, r, c);
+                std::cout << entry << " ";
+            }
+            std::cout << std::endl;
+        }
+    }
+
+    void multiply(int const seed_a, int const seed_b, bool const verbose,
+                  bool const ge, double const ge_value) const
+    {
+    // Algorithm:
+    // 2. Organize processes into pk groups, each group has pm×pn processes.
+    // 3. Assign A to pk groups in a block-column order; assign B to pk groups in a block-row order.
+    //    Denote by Ai the block-column of A assigned to group i; and by Bi the block-row of B assigned to group i.
+    // 4. Within the i-th group: organize processes into c=max(pm,pn)/min(pm,pn) Cannon groups. For example,
+    // assume pn>pm. Bi is then not replicated. Ai is replicated c times — each Cannon group stores its complete copy of Ai.
+    // 5. Perform the Cannon's algorithm in each Cannon group and in each of the pk groups to get Ci.
+    // 6. Reduce C=∑ki=1Ci.
+
+
+    // 2. Organize processes into pk groups, each group has pm×pn processes.
+
+        // matrix A
+        generate_matrix(m, k, seed_a);
+        generate_matrix(k, n, seed_b);
+    }
+
 };
 
 static void usage(char const *progname)
 {
     std::cerr << "Usage: " << progname << " n m k -s seeds [-g ge_value] [-v]\n";
-}
-
-static void generate_matrix(int const i, int const j, int const seed)
-{
-    for (int r = 0; r < i; r++)
-    {
-        for (int c = 0; c < j; c++)
-        {
-            const double entry = generate_double(seed, r, c);
-            std::cout << entry << " ";
-        }
-        std::cout << std::endl;
-    }
-}
-
-static void multiply(int const m, int const n, int const k, int const seed_a,
-                     int const seed_b, bool const verbose, bool const ge,
-                     double const ge_value)
-{
-    // matrix A
-    generate_matrix(m, k, seed_a);
-    generate_matrix(k, n, seed_b);
 }
 
 #ifdef TEST
@@ -115,7 +127,7 @@ int main(int argc, char *argv[])
 
     static char const *const delim = ",";
 
-    unsigned n = 0, m = 0, k = 0;
+    int n = 0, m = 0, k = 0;
 
     char *seeds = nullptr, *ge_value_str = nullptr;
     bool verbose = false;
@@ -156,6 +168,8 @@ int main(int argc, char *argv[])
 
     double const ge_value = ge_value_str ? std::stod(ge_value_str) : 0.;
 
+    Config const conf{n, m, k, p};
+
     // Print the parsed values
     std::cout << "n: " << n << '\n';
     std::cout << "m: " << m << '\n';
@@ -177,7 +191,7 @@ int main(int argc, char *argv[])
 
             std::cout << "Pair: " << first << delim << second << std::endl;
             // Rest of your code goes here...
-            multiply(m, n, k, first, second, verbose, !!ge_value_str, ge_value);
+            conf.multiply(first, second, verbose, !!ge_value_str, ge_value);
 
             token = std::strtok(nullptr, delim);
         }
