@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <mpi.h>
 #include <unistd.h>
 #include <vector>
 
@@ -105,6 +106,13 @@ int main()
 #else
 int main(int argc, char *argv[])
 {
+    int p = 0;
+    int rank = 0;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &p);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
     static char const *const delim = ",";
 
     unsigned n = 0, m = 0, k = 0;
@@ -129,6 +137,7 @@ int main(int argc, char *argv[])
             break;
         default:
             usage(argv[0]);
+            MPI_Finalize();
             return 1;
         }
     }
@@ -137,6 +146,7 @@ int main(int argc, char *argv[])
     if (optind + 2 > argc)
     {
         usage(argv[0]);
+        MPI_Finalize();
         return 1;
     }
 
@@ -174,10 +184,12 @@ int main(int argc, char *argv[])
         else
         {
             std::cerr << "Odd number of seeds. Unpaired: " << first << '\n';
+            MPI_Finalize();
             return 1;
         }
     }
 
+    MPI_Finalize();
     return 0;
 }
 #endif // TEST
