@@ -48,6 +48,8 @@ inline void __check_mpi_error(const char *file, const int line, const int n)
 }
 struct Config
 {
+    bool unused;
+
     int n, m, k;
     int p, p_n, p_m, p_k, p_all;
     int n_padded, m_padded, k_padded;
@@ -112,6 +114,7 @@ struct Config
         p_m = opt_p_m;
         p_k = opt_p_k;
         p_all = max_p_prod;
+        unused = global_rank >= p_all;
 
         m_padded = pad(m, p_m);
         n_padded = pad(n, p_n);
@@ -129,6 +132,9 @@ struct Config
         // print();
 
         gidx = global_rank % p_k;
+
+        if (unused)
+            return;
 
 
         MPI_Comm_split(
@@ -258,6 +264,7 @@ int main(int argc, char *argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     static char const *const delim = ",";
+    char *token;
 
     int n = 0, m = 0, k = 0;
 
@@ -301,6 +308,9 @@ int main(int argc, char *argv[])
     double const ge_value = ge_value_str ? std::stod(ge_value_str) : 0.;
 
     Config const conf{n, m, k, p, rank};
+    if (conf.unused) {
+        goto end;
+    }
 
     // Print the parsed values
     std::cout << "n: " << n << '\n';
@@ -310,7 +320,7 @@ int main(int argc, char *argv[])
     std::cout << "ge_value: " << ge_value << '\n';
     std::cout << "verbose: " << std::boolalpha << verbose << '\n';
 
-    char *token = std::strtok(seeds, delim);
+    token = std::strtok(seeds, delim);
 
     while (token != nullptr)
     {
@@ -335,7 +345,8 @@ int main(int argc, char *argv[])
         }
     }
 
-    MPI_Finalize();
+    end:
+    MPI::Finalize();
     return 0;
 }
 #endif // TEST
