@@ -8,6 +8,8 @@
 #include <cassert>
 #include <cmath>
 
+namespace {
+
 constexpr double const l = 0.95;
 constexpr double const EPS = 0.0001;
 
@@ -15,6 +17,8 @@ constexpr int ceil(int x, int y) {
     return (x + y - 1) / y;
 }
 
+
+// Possibly go up from `what` to the first number divisible by `wrt`.
 constexpr int pad(int const what, int const wrt) {
     int const quotient_ceiling = ceil(what, wrt);
     return wrt * quotient_ceiling;
@@ -26,7 +30,22 @@ constexpr int pad(int const what, int const wrt) {
     res;\
 })
 
-namespace {
+
+// Borrowed from: https://stackoverflow.com/a/75458495
+#define MPI_CHECK(n) __check_mpi_error(__FILE__, __LINE__, n)
+inline void __check_mpi_error(const char *file, const int line, const int n)
+{
+    char errbuffer[MPI::MAX_ERROR_STRING];
+    int errlen;
+
+    if (n != MPI_SUCCESS)
+    {
+        MPI_Error_string(n, errbuffer, &errlen);
+        printf("MPI-error: %s\n", errbuffer);
+        printf("Location: %s:%i\n", file, line);
+        MPI::COMM_WORLD.Abort(n);
+    }
+}
 struct Config
 {
     int n, m, k;
