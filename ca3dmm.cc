@@ -15,6 +15,10 @@ constexpr int ceil(int x, int y) {
     return (x + y - 1) / y;
 }
 
+constexpr int pad(int const what, int const wrt) {
+    int const quotient_ceiling = ceil(what, wrt);
+    return wrt * quotient_ceiling;
+}
 
 namespace {
 struct Config
@@ -162,8 +166,18 @@ static void usage(char const *progname)
 
 #ifdef TEST
 // UNIT TESTS
+void test_pad() {
+    assert(pad(11, 3) == 12);
+    assert(pad(12, 3) == 12);
+    assert(pad(3, 3) == 3);
+    assert(pad(23, 4) == 24);
+    assert(pad(23, 5) == 25);
+}
+
 int main(int argc, char *argv[])
 {
+    test_pad();
+
     MPI_Init(&argc, &argv);
     int rank = -1;
     MPI_Comm_rank(MPI::COMM_WORLD, &rank);
