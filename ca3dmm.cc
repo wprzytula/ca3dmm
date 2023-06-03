@@ -5,16 +5,32 @@
 #include <mpi.h>
 #include <unistd.h>
 #include <vector>
+#include <cassert>
+#include <cmath>
 
 constexpr double const l = 0.95;
+constexpr double const EPS = 0.0001;
+
+constexpr int ceil(int x, int y) {
+    return (x + y - 1) / y;
+}
+
 
 namespace {
 struct Config
 {
-    int n, m, k, p, p_n, p_m, p_k, rank, gidx;
+    int n, m, k;
+    int p, p_n, p_m, p_k, p_all;
 
-    Config(int const n, int const m, int const k, int const p, int const rank)
-        : n{n}, m{m}, k{k}, p{p}, rank{rank}
+    int pillars_per_pk_group;
+    int gidx;
+    int global_rank, pk_group_rank = -1, cannon_group_rank = -1;
+    MPI_Comm pk_group_comm, cannon_group_comm;
+    int pk_group_size = -1, cannon_group_size = -1;
+
+
+    Config(int const n, int const m, int const k, int const p, int const global_rank)
+        : n{n}, m{m}, k{k}, p{p}, global_rank{global_rank}
     {
         // Solve min(p_m*k*n + p_n*m*k + p_k*m*n) with constraints:
         // (a) l*p ≤ p_m*p_n*p_k ≤ p (l is a constant, e.g. 0.95; this ensures we
@@ -57,15 +73,50 @@ struct Config
         p_n = opt_p_n;
         p_m = opt_p_m;
         p_k = opt_p_k;
-        gidx = rank % p_k;
+        p_all = max_p_prod;
+        gidx = global_rank % p_k;
+
+        pillars_per_pk_group = ceil(k, p_k);
+
+        MPI_Comm_split(
+            MPI_COMM_WORLD,
+            global_rank < p_all ? gidx : MPI_UNDEFINED,
+            global_rank,
+            &pk_group_comm
+        );
+        if (pk_group_comm != MPI_COMM_NULL) {
+            MPI_Comm_size(pk_group_comm, &pk_group_size);
+            assert(pk_group_size == p_m * p_n);
+        }
+        MPI_Comm_rank(pk_group_comm, &pk_group_rank);
+
+        // TODO: splitting into Cannon groups
+        // MPI_Comm_split(
+        //     pk_group_comm,
+        //     gidx,
+        //     global_rank % gidx,
+        //     &cannon_group_comm
+        // );
+        // {
+        //     MPI_Comm_size(cannon_group_comm, &cannon_group_size);
+        //     float const size_sqrt = (int) std::sqrt(cannon_group_size);
+        //     assert(std::abs(size_sqrt * size_sqrt - cannon_group_size) < EPS);
+        // }
+        // MPI_Comm_rank(cannon_group_comm, &cannon_group_rank);
     }
 
     void print() const
     {
-        printf("CONFIG: n=%i, m=%i, k=%i, p=%i ---> p_m=%i, p_n=%i, p_k=%i (prod: "
-               "%i, sum: %i)\n",
-               n, m, k, p, p_m, p_n, p_k, p_n * p_m * p_k,
-               p_m * k * n + p_n * m * k + p_k * m * n);
+        printf("CONFIG: n=%i, m=%i, k=%i, p=%i ---> p_m=%i, p_n=%i, p_k=%i, p_all=%i (prod:"
+               "%i, sum: %i),\n global_rank=%i, gidx=%i, pillars_per_pk_group=%i,c"
+               "pk_group_size=%i, pk_group_rank=%i, "
+               "cannon_group_size=%i, cannon_group_rank=%i\n",
+               n, m, k, p, p_m, p_n, p_k, p_all, p_n * p_m * p_k,
+               p_m * k * n + p_n * m * k + p_k * m * n, global_rank,
+               gidx, pillars_per_pk_group,
+               pk_group_size, pk_group_rank,
+               cannon_group_size, cannon_group_rank
+        );
     }
 
     static void generate_matrix(int const i, int const j, int const seed)
@@ -111,10 +162,19 @@ static void usage(char const *progname)
 
 #ifdef TEST
 // UNIT TESTS
-int main()
+int main(int argc, char *argv[])
 {
-    Config const conf{323, 123, 231, 1023, 0};
+    MPI_Init(&argc, &argv);
+    int rank = -1;
+    MPI_Comm_rank(MPI::COMM_WORLD, &rank);
+    int num_proc = -1;
+    MPI_Comm_size(MPI::COMM_WORLD, &num_proc);
+
+    Config const conf{323, 123, 231, num_proc, rank};
+    if (rank == 37)
     conf.print();
+
+    MPI_Finalize();
     return 0;
 }
 
