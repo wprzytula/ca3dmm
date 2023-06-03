@@ -79,20 +79,20 @@ struct Config
         // algorithm can be performed). Among admissible, optimal solutions, pick
         // the one using as many processors as possible, thus maximizing
         // p_m*p_n*p_k.
-        int opt_p_n = p;
-        int opt_p_m = 1;
+        int opt_p_m = p;
+        int opt_p_n = 1;
         int opt_p_k = 1;
         int max_p_prod = opt_p_m * opt_p_n * opt_p_k;
         int min_sum = opt_p_m * k * n + opt_p_n * m * k + opt_p_k * m * n;
 
-        int const l_p = l * p;
+        double const l_p = l * p;
 
-        for (int p_m = 1; p_m < p; ++p_m)
+        for (int p_m = 1; p_m <= p; ++p_m)
         {
             if (p_m * p_m > p)
                 break; // No point in continuing if p_m * p_m exceeds p
             int const p_div_p_m = p / p_m;
-            for (int p_n = p_m; p_n < p_div_p_m; p_n += p_m)
+            for (int p_n = p_m; p_n <= p_div_p_m; p_n += p_m)
             {
                 int const p_k = p / (p_m * p_n);
                 int const p_prod = p_k * p_m * p_n;
