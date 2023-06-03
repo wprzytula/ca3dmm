@@ -31,6 +31,7 @@ struct Config
 {
     int n, m, k;
     int p, p_n, p_m, p_k, p_all;
+    int n_padded, m_padded, k_padded;
 
     int pillars_per_pk_group;
     int gidx;
@@ -84,6 +85,11 @@ struct Config
         p_m = opt_p_m;
         p_k = opt_p_k;
         p_all = max_p_prod;
+
+        m_padded = pad(m, p_m);
+        n_padded = pad(n, p_n);
+        k_padded = pad(k, p_k);
+
         gidx = global_rank % p_k;
 
         pillars_per_pk_group = ceil(k, p_k);
