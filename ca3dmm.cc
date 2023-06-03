@@ -33,12 +33,20 @@ struct Config
     int p, p_n, p_m, p_k, p_all;
     int n_padded, m_padded, k_padded;
 
-    int pillars_per_pk_group;
-    int gidx;
+    int pk_groups_num = -1, pk_group_procs_num = -1;
+    int procs_num_per_chunk_along_k = -1;
+    int pillars_per_pk_group = -1;
+    int gidx = -1;
+
     int global_rank, pk_group_rank = -1, cannon_group_rank = -1;
     MPI_Comm pk_group_comm, cannon_group_comm;
     int pk_group_size = -1, cannon_group_size = -1;
+    int cannon_groups_num = -1;
+    int cannon_coords[2];
 
+    int chunk_a_vertical_len = -1;
+    int chunk_b_horizontal_len = -1;
+    int chunk_along_k_len = -1;
 
     Config(int const n, int const m, int const k, int const p, int const global_rank)
         : n{n}, m{m}, k{k}, p{p}, global_rank{global_rank}
@@ -90,9 +98,19 @@ struct Config
         n_padded = pad(n, p_n);
         k_padded = pad(k, p_k);
 
+        pk_groups_num = p_k;
+        pk_group_procs_num = p_m * p_n;
+
+        chunk_a_vertical_len = norem_div(m_padded, p_m);
+        chunk_b_horizontal_len = norem_div(n_padded, p_n);
+        procs_num_per_chunk_along_k = norem_div(pk_group_procs_num, std::max(p_m, p_n));
+        pillars_per_pk_group = norem_div(k_padded, p_k);
+        // printf("%d, %d\n", pillars_per_pk_group, procs_num_per_chunk_along_k);
+        chunk_along_k_len = norem_div(pillars_per_pk_group, procs_num_per_chunk_along_k);
+        // print();
+
         gidx = global_rank % p_k;
 
-        pillars_per_pk_group = ceil(k, p_k);
 
         MPI_Comm_split(
             MPI_COMM_WORLD,
@@ -106,32 +124,38 @@ struct Config
         }
         MPI_Comm_rank(pk_group_comm, &pk_group_rank);
 
-        // TODO: splitting into Cannon groups
-        // MPI_Comm_split(
-        //     pk_group_comm,
-        //     gidx,
-        //     global_rank % gidx,
-        //     &cannon_group_comm
-        // );
-        // {
-        //     MPI_Comm_size(cannon_group_comm, &cannon_group_size);
-        //     float const size_sqrt = (int) std::sqrt(cannon_group_size);
-        //     assert(std::abs(size_sqrt * size_sqrt - cannon_group_size) < EPS);
-        // }
-        // MPI_Comm_rank(cannon_group_comm, &cannon_group_rank);
+        cannon_groups_num = std::max(p_m, p_n) / std::min(p_m, p_n);
+        cannon_group_size = norem_div(pk_group_size, cannon_groups_num);
+
+        MPI_Comm_split(
+            pk_group_comm,
+            pk_group_rank / cannon_group_size,
+            pk_group_rank,
+            &cannon_group_comm
+        );
+        {
+            int cgrpsz;
+            MPI_Comm_size(cannon_group_comm, &cgrpsz);
+            assert(cannon_group_size == cgrpsz);
+        }
+        MPI_Comm_rank(cannon_group_comm, &cannon_group_rank);
     }
 
     void print() const
     {
         printf("CONFIG: n=%i, m=%i, k=%i, p=%i ---> p_m=%i, p_n=%i, p_k=%i, p_all=%i (prod:"
-               "%i, sum: %i),\n global_rank=%i, gidx=%i, pillars_per_pk_group=%i,c"
+               "%i, sum: %i),\n k_padded=%i, m_padded=%i, n_padded=%i,"
+               "global_rank=%i, gidx=%i, pillars_per_pk_group=%i,c"
                "pk_group_size=%i, pk_group_rank=%i, "
-               "cannon_group_size=%i, cannon_group_rank=%i\n",
+               "cannon_groups_num=%i, cannon_group_size=%i, cannon_group_rank=%i"
+               "procs_num_per_chunk_along_k=%i, chunk_a_vertical_len=%i, chunk_b_horizontal_len=%i, chunk_along_k_len=%i\n",
                n, m, k, p, p_m, p_n, p_k, p_all, p_n * p_m * p_k,
-               p_m * k * n + p_n * m * k + p_k * m * n, global_rank,
+               p_m * k * n + p_n * m * k + p_k * m * n, k_padded, m_padded, n_padded,
+               global_rank,
                gidx, pillars_per_pk_group,
                pk_group_size, pk_group_rank,
-               cannon_group_size, cannon_group_rank
+               cannon_groups_num, cannon_group_size, cannon_group_rank,
+               procs_num_per_chunk_along_k, chunk_a_vertical_len, chunk_b_horizontal_len, chunk_along_k_len
         );
     }
 
