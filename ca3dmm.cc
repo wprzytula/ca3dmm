@@ -20,6 +20,12 @@ constexpr int pad(int const what, int const wrt) {
     return wrt * quotient_ceiling;
 }
 
+#define norem_div(dividend, divisor) ({\
+    int const res = (dividend) / (divisor);\
+    assert(res * divisor == dividend);\
+    res;\
+})
+
 namespace {
 struct Config
 {
