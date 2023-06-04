@@ -7,6 +7,7 @@
 #include <vector>
 #include <cassert>
 #include <cmath>
+#include <memory>
 
 using f = double;
 
@@ -48,6 +49,15 @@ inline void __check_mpi_error(const char *file, const int line, const int n)
         MPI::COMM_WORLD.Abort(n);
     }
 }
+
+void print_array(f const *arr, int const len) {
+    printf("Array: \n");
+    for (int i = 0; i < len; ++i) {
+        printf("%f ", arr[i]);
+    }
+    printf("\n");
+}
+
 struct Config
 {
     bool unused;
@@ -329,6 +339,40 @@ struct Config
     }
 
 
+    void generate_matrix_A_part(f *A, int const seed, int const pk_group_idx) const {
+        // bool const cannon_groups_are_horizontal = p_n >= p_m;
+        int const chunk_size = chunk_a_vertical_len * chunk_along_k_len;
+        printf("\nChunk size: %i\n", chunk_size);
+
+        for (int r = 0; r < m_padded; r++) {
+            for (int c = 0; c < pillars_per_pk_group; c++) {
+                int const real_matrix_row = r;
+                int const real_matrix_col = pk_group_idx * pillars_per_pk_group + c;
+                bool const out_of_bounds = r >= m || c >= k;
+                const f entry = out_of_bounds ?
+                    ({
+                        printf("Generating 0 for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        0;
+                    }) :
+                    ({
+                        printf("Generating entry for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        generate_double(seed, real_matrix_row, real_matrix_col);
+                    });
+
+                int const chunk_col = c / chunk_along_k_len;
+                int const chunk_col_offset = c % chunk_along_k_len;
+                int const chunk_row = r / chunk_a_vertical_len;
+                int const chunk_row_offset = r % chunk_a_vertical_len;
+                int const chunk_idx = chunk_col * p_m + chunk_row;
+                int const chunk_offset = chunk_row_offset * chunk_along_k_len + chunk_col_offset;
+
+                printf("Placing entry in chunk no %i, at offset %i: A[%i]\n",
+                        chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
+                A[chunk_idx * chunk_size + chunk_offset] = entry;
+            }
+        }
+    }
+
     static void generate_matrix(int const i, int const j, int const seed)
     {
         for (int r = 0; r < i; r++)
@@ -358,8 +402,41 @@ struct Config
     // 2. Organize processes into pk groups, each group has pm×pn processes.
 
         // matrix A
-        generate_matrix(m, k, seed_a);
-        generate_matrix(k, n, seed_b);
+        int const pk_group_vals_a = pillars_per_pk_group * m_padded;
+
+        if (pk_groups_leaders_rank != -1)
+            print();
+        if (global_rank == 0) {
+            std::unique_ptr<f[]> A{new f[pk_group_vals_a]};
+            for (int pk_group_idx = 1; pk_group_idx < pk_group_size; ++pk_group_idx) {
+                generate_matrix_A_part(A.get(), seed_a, pk_group_idx);
+                print_array(A.get(), pk_group_vals_a);
+                MPI_CHECK(MPI_Send(
+                    A.get(),
+                    pk_group_vals_a,
+                    MPI_DOUBLE,
+                    pk_group_idx,
+                    0,
+                    pk_groups_leaders_comm
+                ));
+            }
+            generate_matrix_A_part(A.get(), seed_a, 0);
+            print_array(A.get(), pk_group_vals_a);
+        } else if (pk_group_rank == 0) {
+            std::unique_ptr<f[]> A{new f[pk_group_vals_a]};
+            MPI_CHECK(MPI_Recv(
+                A.get(),
+                pk_group_vals_a,
+                MPI_DOUBLE,
+                0,
+                0,
+                pk_groups_leaders_comm,
+                MPI_STATUS_IGNORE
+            ));
+        }
+
+        // generate_matrix(m, k, seed_a);
+        // generate_matrix(k, n, seed_b);
     }
 
 };
@@ -479,7 +556,7 @@ int main(int argc, char *argv[])
             int second = std::stoi(token);
 
             // std::cout << "Pair: " << first << delim << second << std::endl;
-            // conf.multiply(first, second, verbose, !!ge_value_str, ge_value);
+            conf.multiply(first, second, verbose, !!ge_value_str, ge_value);
 
             token = std::strtok(nullptr, delim);
         }
