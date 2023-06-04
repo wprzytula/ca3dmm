@@ -62,7 +62,7 @@ struct Config
     int gidx = -1;
 
     int global_rank, pk_group_rank = -1, cannon_group_rank = -1;
-    MPI_Comm pk_group_comm, cannon_group_comm;
+    MPI_Comm pk_group_comm, cannon_group_comm, pk_groups_leaders_comm, cannon_groups_leaders_comm;
     int pk_group_size = -1, cannon_group_size = -1, cannon_group_dim = -1;
     int cannon_groups_num = -1;
     int cannon_coords[2];
@@ -195,6 +195,33 @@ struct Config
 
         MPI_CHECK(MPI_Cart_shift(cannon_group_comm, 0, 1, &left_neigh_rank, &right_neigh_rank));
         MPI_CHECK(MPI_Cart_shift(cannon_group_comm, 1, 1, &up_neigh_rank, &down_neigh_rank));
+
+
+        /* Matrix parts distribution communication */
+        bool const is_pk_group_leader = global_rank % pk_group_size == 0;
+        if (is_pk_group_leader) {
+            MPI_CHECK(MPI_Comm_split(
+                MPI_COMM_WORLD,
+                is_pk_group_leader,
+                global_rank,
+                &pk_groups_leaders_comm
+            ));
+        } else {
+            pk_groups_leaders_comm = MPI_COMM_NULL;
+        }
+
+        bool const is_cannon_group_leader = global_rank % cannon_group_size == 0;
+        if (is_cannon_group_leader) {
+            MPI_CHECK(MPI_Comm_split(
+                MPI_COMM_WORLD,
+                 // all non-leaders get color 0, all leaders get color equal to idx of their pk_group.
+                ((global_rank / pk_group_size) + 1) * is_cannon_group_leader,
+                global_rank,
+                &cannon_groups_leaders_comm
+            ));
+        } else {
+            cannon_groups_leaders_comm = MPI_COMM_NULL;
+        }
     }
 
     void print() const
