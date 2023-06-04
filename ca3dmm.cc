@@ -8,6 +8,8 @@
 #include <cassert>
 #include <cmath>
 
+using f = double;
+
 namespace {
 
 constexpr double const l = 0.95;
@@ -206,6 +208,84 @@ struct Config
                procs_num_per_chunk_along_k, chunk_a_vertical_len, chunk_b_horizontal_len, chunk_along_k_len
         );
     }
+
+    void preskew_A(f *buf) const {
+        int preskew_dest, preskew_src;
+        MPI_Cart_shift(
+            cannon_group_comm,
+            1,
+            -cannon_coords[0], // left
+            &preskew_src,
+            &preskew_dest
+        );
+        MPI_Sendrecv_replace(
+            buf,
+            chunk_a_vertical_len * chunk_along_k_len,
+            MPI_DOUBLE,
+            preskew_dest,
+            0,
+            preskew_src,
+            0,
+            cannon_group_comm,
+            MPI_STATUS_IGNORE
+        );
+    }
+
+    void preskew_B(f *buf) const {
+        int preskew_dest, preskew_src;
+        MPI_Cart_shift(
+            cannon_group_comm,
+            0,
+            -cannon_coords[1], // up
+            &preskew_src,
+            &preskew_dest
+        );
+        MPI_Sendrecv_replace(
+            buf,
+            chunk_b_horizontal_len * chunk_along_k_len,
+            MPI_DOUBLE,
+            preskew_dest,
+            0,
+            preskew_src,
+            0,
+            cannon_group_comm,
+            MPI_STATUS_IGNORE
+        );
+    }
+
+    void cannon_step_A(f *buf) const {
+		MPI_Sendrecv_replace(buf, chunk_a_vertical_len * chunk_along_k_len, MPI_DOUBLE, left_neigh_rank, 0, right_neigh_rank, 0, cannon_group_comm, MPI_STATUS_IGNORE);
+    }
+
+    void cannon_step_B(f *buf) const {
+        MPI_Sendrecv_replace(buf, chunk_b_horizontal_len * chunk_along_k_len, MPI_DOUBLE, up_neigh_rank, 0, down_neigh_rank, 0, cannon_group_comm, MPI_STATUS_IGNORE);
+    }
+
+    void multiply_locally(f const *A, f const *B, f *C) const {
+        // Multiply locally
+        for (int i = 0; i < chunk_a_vertical_len; ++i) {
+            for (int j = 0; j < chunk_b_horizontal_len; ++j) {
+                int sum = 0;
+                for (int k = 0; k < chunk_along_k_len; ++k) {
+                    sum += A[i * chunk_along_k_len + k] * B[j * chunk_along_k_len + k];
+                }
+                C[i * chunk_b_horizontal_len + j] += sum;
+            }
+        }
+    }
+
+    void cannon_algorithm(f *A, f *B, f *C) const {
+        preskew_A(A);
+        preskew_B(B);
+        multiply_locally(A, B, C);
+        for (int shift = 0; shift < cannon_group_dim; ++shift) {
+            // TODO: Init both async and wait for them
+            cannon_step_A(A);
+            cannon_step_B(B);
+            multiply_locally(A, B, C);
+        }
+    }
+
 
     static void generate_matrix(int const i, int const j, int const seed)
     {
