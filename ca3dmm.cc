@@ -193,8 +193,8 @@ struct Config
         MPI_CHECK(MPI_Comm_set_errhandler(cannon_group_comm, MPI_ERRORS_RETURN));
         MPI_CHECK(MPI_Cart_coords(cannon_group_comm, cannon_group_rank, 2, cannon_coords));
 
-        MPI_CHECK(MPI_Cart_shift(cannon_group_comm, 1, 1, &left_neigh_rank, &right_neigh_rank));
-        MPI_CHECK(MPI_Cart_shift(cannon_group_comm, 0, 1, &up_neigh_rank, &down_neigh_rank));
+        MPI_CHECK(MPI_Cart_shift(cannon_group_comm, 0, 1, &left_neigh_rank, &right_neigh_rank));
+        MPI_CHECK(MPI_Cart_shift(cannon_group_comm, 1, 1, &up_neigh_rank, &down_neigh_rank));
     }
 
     void print() const
@@ -221,7 +221,7 @@ struct Config
         int preskew_dest, preskew_src;
         MPI_Cart_shift(
             cannon_group_comm,
-            1,
+            0,
             -cannon_coords[0], // left
             &preskew_src,
             &preskew_dest
@@ -243,7 +243,7 @@ struct Config
         int preskew_dest, preskew_src;
         MPI_Cart_shift(
             cannon_group_comm,
-            0,
+            1,
             -cannon_coords[1], // up
             &preskew_src,
             &preskew_dest
