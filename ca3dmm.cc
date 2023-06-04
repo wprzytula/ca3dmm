@@ -74,6 +74,10 @@ struct Config
     int up_neigh_rank = -1;
     int down_neigh_rank = -1;
 
+    static int minimised_sum(int const m, int const n, int const k, int const p_m, int const p_n, int const p_k) {
+        return p_m * k * n + p_n * m * k + p_k * m * n;
+    }
+
     Config(int const n, int const m, int const k, int const p, int const global_rank)
         : n{n}, m{m}, k{k}, p{p}, global_rank{global_rank}
     {
@@ -90,7 +94,7 @@ struct Config
         int opt_p_n = 1;
         int opt_p_k = 1;
         int max_p_prod = opt_p_m * opt_p_n * opt_p_k;
-        int min_sum = opt_p_m * k * n + opt_p_n * m * k + opt_p_k * m * n;
+        int min_sum = minimised_sum(m, n, k, opt_p_m, opt_p_n, opt_p_k);
 
         double const l_p = l * p;
 
@@ -103,7 +107,7 @@ struct Config
             {
                 int const p_k = p / (p_m * p_n);
                 int const p_prod = p_k * p_m * p_n;
-                int const sum = p_m * k * n + p_n * m * k + p_k * m * n;
+                int const sum = minimised_sum(m, n, k, p_m, p_n, p_k);
                 if (l_p <= p_prod && p_prod <= p &&
                     (sum < min_sum || (sum == min_sum && p_prod > max_p_prod)))
                 {
@@ -193,7 +197,7 @@ struct Config
                "left_neigh_rank=%i, left_neigh_rank=%i, up_neigh_rank=%i, down_neigh_rank=%i, "
                "procs_num_per_chunk_along_k=%i, chunk_a_vertical_len=%i, chunk_b_horizontal_len=%i, chunk_along_k_len=%i\n",
                n, m, k, p, p_m, p_n, p_k, p_all, p_n * p_m * p_k,
-               p_m * k * n + p_n * m * k + p_k * m * n, k_padded, m_padded, n_padded,
+               minimised_sum(m, n, k, p_m, p_n, p_k), k_padded, m_padded, n_padded,
                global_rank,
                gidx, pillars_per_pk_group,
                pk_group_size, pk_group_rank,
