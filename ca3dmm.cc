@@ -83,6 +83,8 @@ struct Config
     Config(int const n, int const m, int const k, int const p, int const global_rank)
         : n{n}, m{m}, k{k}, p{p}, global_rank{global_rank}
     {
+        /* Solving the equation optimally */
+
         // Solve min(p_m*k*n + p_n*m*k + p_k*m*n) with constraints:
         // (a) l*p ≤ p_m*p_n*p_k ≤ p (l is a constant, e.g. 0.95; this ensures we
         // use
@@ -131,6 +133,9 @@ struct Config
         n_padded = pad(n, p_n);
         k_padded = pad(k, p_k);
 
+
+        /* P_k groups config & intracommunication */
+
         pk_groups_num = p_k;
         int const pk_group_procs_num = p_m * p_n;
 
@@ -158,6 +163,9 @@ struct Config
         }
         MPI_CHECK(MPI_Comm_set_errhandler(pk_group_comm, MPI_ERRORS_RETURN));
         MPI_CHECK(MPI_Comm_rank(pk_group_comm, &pk_group_rank));
+
+
+        /* Cannon groups config & intracommunication */
 
         cannon_groups_num = std::max(p_m, p_n) / std::min(p_m, p_n);
         cannon_group_size = norem_div(pk_group_size, cannon_groups_num);
