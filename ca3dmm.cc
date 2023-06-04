@@ -56,7 +56,7 @@ struct Config
     int p, p_n, p_m, p_k, p_all;
     int n_padded, m_padded, k_padded;
 
-    int pk_groups_num = -1, pk_group_procs_num = -1;
+    int pk_groups_num = -1;
     int procs_num_per_chunk_along_k = -1;
     int pillars_per_pk_group = -1;
     int gidx = -1;
@@ -132,7 +132,7 @@ struct Config
         k_padded = pad(k, p_k);
 
         pk_groups_num = p_k;
-        pk_group_procs_num = p_m * p_n;
+        int const pk_group_procs_num = p_m * p_n;
 
         chunk_a_vertical_len = norem_div(m_padded, p_m);
         chunk_b_horizontal_len = norem_div(n_padded, p_n);
@@ -141,7 +141,7 @@ struct Config
         // printf("%d, %d\n", pillars_per_pk_group, procs_num_per_chunk_along_k);
         chunk_along_k_len = norem_div(pillars_per_pk_group, procs_num_per_chunk_along_k);
 
-        gidx = global_rank % p_k;
+        gidx = global_rank / pk_group_procs_num;
 
         if (unused)
             return;
