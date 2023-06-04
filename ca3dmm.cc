@@ -145,8 +145,8 @@ struct Config
         chunk_a_vertical_len = norem_div(m_padded, p_m);
         chunk_b_horizontal_len = norem_div(n_padded, p_n);
         procs_num_per_chunk_along_k = norem_div(pk_group_procs_num, std::max(p_m, p_n));
+        // k_padded = pad(k, p_k * procs_num_per_chunk_along_k);
         pillars_per_pk_group = norem_div(k_padded, p_k);
-        // printf("%d, %d\n", pillars_per_pk_group, procs_num_per_chunk_along_k);
         chunk_along_k_len = norem_div(pillars_per_pk_group, procs_num_per_chunk_along_k);
 
         gidx = global_rank / pk_group_procs_num;
@@ -364,11 +364,11 @@ struct Config
 
 };
 
-static void usage(char const *progname)
+void usage(char const *progname)
 {
     std::cerr << "Usage: " << progname << " n m k -s seeds [-g ge_value] [-v]\n";
 }
-}
+} // namespace
 
 #ifdef TEST
 // UNIT TESTS
@@ -457,7 +457,7 @@ int main(int argc, char *argv[])
     if (conf.unused) {
         goto end;
     }
-    conf.print();
+    // conf.print();
 
     // Print the parsed values
     // std::cout << "n: " << n << '\n';
