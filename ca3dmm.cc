@@ -214,7 +214,7 @@ struct Config
         bool const is_pk_group_leader = global_rank % pk_group_size == 0;
         MPI_CHECK(MPI_Comm_split(
             MPI_COMM_WORLD,
-            is_pk_group_leader ? 0 : MPI_UNDEFINED,
+            is_pk_group_leader,
             global_rank,
             &pk_groups_leaders_comm
         ));
@@ -223,6 +223,8 @@ struct Config
             int sz;
             MPI_CHECK(MPI_Comm_size(pk_groups_leaders_comm, &sz));
             assert(sz == pk_groups_num);
+        } else {
+            pk_groups_leaders_comm = MPI_COMM_NULL;
         }
 
         bool const is_cannon_group_leader = global_rank % cannon_group_size == 0;
@@ -233,8 +235,11 @@ struct Config
             global_rank,
             &cannon_groups_leaders_comm
         ));
-        if (is_cannon_group_leader)
+        if (is_cannon_group_leader) {
             MPI_CHECK(MPI_Comm_rank(cannon_groups_leaders_comm, &cannon_groups_leaders_rank));
+        } else {
+            cannon_groups_leaders_comm = MPI_COMM_NULL;
+        }
     }
 
 #define SEP "\n"
@@ -342,7 +347,6 @@ struct Config
     void generate_matrix_A_part(f *A, int const seed, int const pk_group_idx) const {
         // bool const cannon_groups_are_horizontal = p_n >= p_m;
         int const chunk_size = chunk_a_vertical_len * chunk_along_k_len;
-        printf("\nChunk size: %i\n", chunk_size);
 
         for (int r = 0; r < m_padded; r++) {
             for (int c = 0; c < pillars_per_pk_group; c++) {
@@ -351,11 +355,11 @@ struct Config
                 bool const out_of_bounds = r >= m || c >= k;
                 const f entry = out_of_bounds ?
                     ({
-                        printf("Generating 0 for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        // printf("Generating 0 for A[%i,%i]\n", real_matrix_row, real_matrix_col);
                         0;
                     }) :
                     ({
-                        printf("Generating entry for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        // printf("Generating entry for A[%i,%i]\n", real_matrix_row, real_matrix_col);
                         generate_double(seed, real_matrix_row, real_matrix_col);
                     });
 
@@ -366,23 +370,10 @@ struct Config
                 int const chunk_idx = chunk_col * p_m + chunk_row;
                 int const chunk_offset = chunk_row_offset * chunk_along_k_len + chunk_col_offset;
 
-                printf("Placing entry in chunk no %i, at offset %i: A[%i]\n",
-                        chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
+                // printf("Placing entry in chunk no %i, at offset %i: A[%i]\n",
+                //         chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
                 A[chunk_idx * chunk_size + chunk_offset] = entry;
             }
-        }
-    }
-
-    static void generate_matrix(int const i, int const j, int const seed)
-    {
-        for (int r = 0; r < i; r++)
-        {
-            for (int c = 0; c < j; c++)
-            {
-                const double entry = generate_double(seed, r, c);
-                std::cout << entry << " ";
-            }
-            std::cout << std::endl;
         }
     }
 
