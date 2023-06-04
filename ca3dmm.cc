@@ -173,6 +173,15 @@ struct Config
         }
         MPI_CHECK(MPI_Comm_rank(cannon_group_comm, &cannon_group_rank));
 
+        int dims[2] = {cannon_group_dim, cannon_group_dim};
+        int periods[2] = {true, true};
+
+        MPI_CHECK(MPI_Cart_create(cannon_group_comm, 2, dims, periods, false, &cannon_group_comm));
+        MPI_CHECK(MPI_Comm_set_errhandler(cannon_group_comm, MPI_ERRORS_RETURN));
+        MPI_CHECK(MPI_Cart_coords(cannon_group_comm, cannon_group_rank, 2, cannon_coords));
+
+        MPI_CHECK(MPI_Cart_shift(cannon_group_comm, 1, 1, &left_neigh_rank, &right_neigh_rank));
+        MPI_CHECK(MPI_Cart_shift(cannon_group_comm, 0, 1, &up_neigh_rank, &down_neigh_rank));
     }
 
     void print() const
