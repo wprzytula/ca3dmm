@@ -134,7 +134,6 @@ struct Config
         pillars_per_pk_group = norem_div(k_padded, p_k);
         // printf("%d, %d\n", pillars_per_pk_group, procs_num_per_chunk_along_k);
         chunk_along_k_len = norem_div(pillars_per_pk_group, procs_num_per_chunk_along_k);
-        // print();
 
         gidx = global_rank % p_k;
 
@@ -332,14 +331,15 @@ int main(int argc, char *argv[])
     if (conf.unused) {
         goto end;
     }
+    conf.print();
 
     // Print the parsed values
-    std::cout << "n: " << n << '\n';
-    std::cout << "m: " << m << '\n';
-    std::cout << "k: " << k << '\n';
-    std::cout << "seeds: " << seeds << '\n';
-    std::cout << "ge_value: " << ge_value << '\n';
-    std::cout << "verbose: " << std::boolalpha << verbose << '\n';
+    // std::cout << "n: " << n << '\n';
+    // std::cout << "m: " << m << '\n';
+    // std::cout << "k: " << k << '\n';
+    // std::cout << "seeds: " << seeds << '\n';
+    // std::cout << "ge_value: " << ge_value << '\n';
+    // std::cout << "verbose: " << std::boolalpha << verbose << '\n';
 
     token = std::strtok(seeds, delim);
 
@@ -352,9 +352,8 @@ int main(int argc, char *argv[])
         {
             int second = std::stoi(token);
 
-            std::cout << "Pair: " << first << delim << second << std::endl;
-            // Rest of your code goes here...
-            conf.multiply(first, second, verbose, !!ge_value_str, ge_value);
+            // std::cout << "Pair: " << first << delim << second << std::endl;
+            // conf.multiply(first, second, verbose, !!ge_value_str, ge_value);
 
             token = std::strtok(nullptr, delim);
         }
