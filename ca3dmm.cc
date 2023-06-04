@@ -392,16 +392,18 @@ struct Config
 
     // 2. Organize processes into pk groups, each group has pm×pn processes.
 
+
+        /* Distribute to pk groups */
         // matrix A
         int const pk_group_vals_a = pillars_per_pk_group * m_padded;
+        int const a_chunk_size = chunk_a_vertical_len * chunk_along_k_len;
+        std::unique_ptr<f[]> A{new f[pk_group_vals_a]};
+        std::unique_ptr<f[]> A_chunk{new f[a_chunk_size]};
 
-        if (pk_groups_leaders_rank != -1)
-            print();
         if (global_rank == 0) {
-            std::unique_ptr<f[]> A{new f[pk_group_vals_a]};
-            for (int pk_group_idx = 1; pk_group_idx < pk_group_size; ++pk_group_idx) {
+            print();
+            for (int pk_group_idx = 1; pk_group_idx < p_k; ++pk_group_idx) {
                 generate_matrix_A_part(A.get(), seed_a, pk_group_idx);
-                print_array(A.get(), pk_group_vals_a);
                 MPI_CHECK(MPI_Send(
                     A.get(),
                     pk_group_vals_a,
@@ -414,7 +416,6 @@ struct Config
             generate_matrix_A_part(A.get(), seed_a, 0);
             print_array(A.get(), pk_group_vals_a);
         } else if (pk_group_rank == 0) {
-            std::unique_ptr<f[]> A{new f[pk_group_vals_a]};
             MPI_CHECK(MPI_Recv(
                 A.get(),
                 pk_group_vals_a,
@@ -424,10 +425,34 @@ struct Config
                 pk_groups_leaders_comm,
                 MPI_STATUS_IGNORE
             ));
+            print_array(A.get(), pk_group_vals_a);
         }
 
-        // generate_matrix(m, k, seed_a);
-        // generate_matrix(k, n, seed_b);
+        /* Distribute to cannon groups */
+        if (cannon_groups_num > 1 && cannon_groups_leaders_comm != MPI_COMM_NULL) {
+            MPI_CHECK(MPI_Bcast(
+                A.get(),
+                pk_group_vals_a,
+                MPI_DOUBLE,
+                0,
+                cannon_groups_leaders_comm
+            ));
+            // if (pk_groups_leaders_comm == MPI_COMM_NULL)
+            //     print_array(A.get(), pk_group_vals_a);
+        }
+
+        MPI_CHECK(MPI_Scatter(
+            A.get(),
+            a_chunk_size,
+            MPI_DOUBLE,
+            A_chunk.get(),
+            a_chunk_size,
+            MPI_DOUBLE,
+            0,
+            cannon_group_comm
+        ));
+
+        printf("p%i: ", global_rank); print_array(A_chunk.get(), a_chunk_size);
     }
 
 };
