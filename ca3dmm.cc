@@ -61,13 +61,18 @@ struct Config
 
     int global_rank, pk_group_rank = -1, cannon_group_rank = -1;
     MPI_Comm pk_group_comm, cannon_group_comm;
-    int pk_group_size = -1, cannon_group_size = -1;
+    int pk_group_size = -1, cannon_group_size = -1, cannon_group_dim = -1;
     int cannon_groups_num = -1;
     int cannon_coords[2];
 
     int chunk_a_vertical_len = -1;
     int chunk_b_horizontal_len = -1;
     int chunk_along_k_len = -1;
+
+    int left_neigh_rank = -1;
+    int right_neigh_rank = -1;
+    int up_neigh_rank = -1;
+    int down_neigh_rank = -1;
 
     Config(int const n, int const m, int const k, int const p, int const global_rank)
         : n{n}, m{m}, k{k}, p{p}, global_rank{global_rank}
@@ -151,6 +156,8 @@ struct Config
 
         cannon_groups_num = std::max(p_m, p_n) / std::min(p_m, p_n);
         cannon_group_size = norem_div(pk_group_size, cannon_groups_num);
+        cannon_group_dim = std::min(p_m, p_n);
+        assert(cannon_group_size == cannon_group_dim * cannon_group_dim);
 
         MPI_Comm_split(
             pk_group_comm,
@@ -168,11 +175,12 @@ struct Config
 
     void print() const
     {
-        printf("CONFIG: n=%i, m=%i, k=%i, p=%i ---> p_m=%i, p_n=%i, p_k=%i, p_all=%i (prod:"
-               "%i, sum: %i),\n k_padded=%i, m_padded=%i, n_padded=%i,"
-               "global_rank=%i, gidx=%i, pillars_per_pk_group=%i,c"
+        printf("\n\tCONFIG: n=%i, m=%i, k=%i, p=%i ---> p_m=%i, p_n=%i, p_k=%i, p_all=%i (prod:"
+               "%i, sum: %i), k_padded=%i, m_padded=%i, n_padded=%i, "
+               "global_rank=%i, gidx=%i, pillars_per_pk_group=%i, "
                "pk_group_size=%i, pk_group_rank=%i, "
-               "cannon_groups_num=%i, cannon_group_size=%i, cannon_group_rank=%i"
+               "cannon_groups_num=%i, cannon_group_size=%i, cannon_group_rank=%i, "
+               "left_neigh_rank=%i, left_neigh_rank=%i, up_neigh_rank=%i, down_neigh_rank=%i, "
                "procs_num_per_chunk_along_k=%i, chunk_a_vertical_len=%i, chunk_b_horizontal_len=%i, chunk_along_k_len=%i\n",
                n, m, k, p, p_m, p_n, p_k, p_all, p_n * p_m * p_k,
                p_m * k * n + p_n * m * k + p_k * m * n, k_padded, m_padded, n_padded,
@@ -180,6 +188,7 @@ struct Config
                gidx, pillars_per_pk_group,
                pk_group_size, pk_group_rank,
                cannon_groups_num, cannon_group_size, cannon_group_rank,
+               left_neigh_rank, right_neigh_rank, up_neigh_rank, down_neigh_rank,
                procs_num_per_chunk_along_k, chunk_a_vertical_len, chunk_b_horizontal_len, chunk_along_k_len
         );
     }
