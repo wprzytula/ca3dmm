@@ -141,36 +141,38 @@ struct Config
         if (unused)
             return;
 
-
-        MPI_Comm_split(
+        MPI_CHECK(MPI_Comm_split(
             MPI_COMM_WORLD,
             global_rank < p_all ? gidx : MPI_UNDEFINED,
             global_rank,
             &pk_group_comm
-        );
+        ));
         if (pk_group_comm != MPI_COMM_NULL) {
-            MPI_Comm_size(pk_group_comm, &pk_group_size);
+            MPI_CHECK(MPI_Comm_size(pk_group_comm, &pk_group_size));
             assert(pk_group_size == p_m * p_n);
         }
-        MPI_Comm_rank(pk_group_comm, &pk_group_rank);
+        MPI_CHECK(MPI_Comm_set_errhandler(pk_group_comm, MPI_ERRORS_RETURN));
+        MPI_CHECK(MPI_Comm_rank(pk_group_comm, &pk_group_rank));
 
         cannon_groups_num = std::max(p_m, p_n) / std::min(p_m, p_n);
         cannon_group_size = norem_div(pk_group_size, cannon_groups_num);
         cannon_group_dim = std::min(p_m, p_n);
         assert(cannon_group_size == cannon_group_dim * cannon_group_dim);
 
-        MPI_Comm_split(
+        MPI_CHECK(MPI_Comm_split(
             pk_group_comm,
             pk_group_rank / cannon_group_size,
             pk_group_rank,
             &cannon_group_comm
-        );
+        ));
+        MPI_CHECK(MPI_Comm_set_errhandler(cannon_group_comm, MPI_ERRORS_RETURN));
         {
             int cgrpsz;
-            MPI_Comm_size(cannon_group_comm, &cgrpsz);
+            MPI_CHECK(MPI_Comm_size(cannon_group_comm, &cgrpsz));
             assert(cannon_group_size == cgrpsz);
         }
-        MPI_Comm_rank(cannon_group_comm, &cannon_group_rank);
+        MPI_CHECK(MPI_Comm_rank(cannon_group_comm, &cannon_group_rank));
+
     }
 
     void print() const
@@ -256,7 +258,7 @@ int main(int argc, char *argv[])
 
     Config const conf{323, 123, 231, num_proc, rank};
     if (rank == 37)
-    conf.print();
+        conf.print();
 
     MPI_Finalize();
     return 0;
@@ -268,9 +270,10 @@ int main(int argc, char *argv[])
     int p = 0;
     int rank = 0;
 
-    MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &p);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_CHECK(MPI_Init(&argc, &argv));
+    MPI_CHECK(MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_RETURN));
+    MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &p));
+    MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
 
     static char const *const delim = ",";
     char *token;
@@ -306,7 +309,7 @@ int main(int argc, char *argv[])
     if (optind + 2 > argc)
     {
         usage(argv[0]);
-        MPI_Finalize();
+        MPI_CHECK(MPI_Finalize());
         return 1;
     }
 
@@ -349,13 +352,13 @@ int main(int argc, char *argv[])
         else
         {
             std::cerr << "Odd number of seeds. Unpaired: " << first << '\n';
-            MPI_Finalize();
+            MPI_CHECK(MPI_Finalize());
             return 1;
         }
     }
 
     end:
-    MPI::Finalize();
+    MPI_CHECK(MPI_Finalize());
     return 0;
 }
 #endif // TEST
