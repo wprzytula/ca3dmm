@@ -76,6 +76,9 @@ struct Config
     int up_neigh_rank = -1;
     int down_neigh_rank = -1;
 
+    int pk_groups_leaders_rank = -1;
+    int cannon_groups_leaders_rank = -1;
+
     static int minimised_sum(int const m, int const n, int const k, int const p_m, int const p_n, int const p_k) {
         return p_m * k * n + p_n * m * k + p_k * m * n;
     }
@@ -199,29 +202,29 @@ struct Config
 
         /* Matrix parts distribution communication */
         bool const is_pk_group_leader = global_rank % pk_group_size == 0;
+        MPI_CHECK(MPI_Comm_split(
+            MPI_COMM_WORLD,
+            is_pk_group_leader ? 0 : MPI_UNDEFINED,
+            global_rank,
+            &pk_groups_leaders_comm
+        ));
         if (is_pk_group_leader) {
-            MPI_CHECK(MPI_Comm_split(
-                MPI_COMM_WORLD,
-                is_pk_group_leader,
-                global_rank,
-                &pk_groups_leaders_comm
-            ));
-        } else {
-            pk_groups_leaders_comm = MPI_COMM_NULL;
+            MPI_CHECK(MPI_Comm_rank(pk_groups_leaders_comm, &pk_groups_leaders_rank));
+            int sz;
+            MPI_CHECK(MPI_Comm_size(pk_groups_leaders_comm, &sz));
+            assert(sz == pk_groups_num);
         }
 
         bool const is_cannon_group_leader = global_rank % cannon_group_size == 0;
-        if (is_cannon_group_leader) {
-            MPI_CHECK(MPI_Comm_split(
-                MPI_COMM_WORLD,
-                 // all non-leaders get color 0, all leaders get color equal to idx of their pk_group.
-                ((global_rank / pk_group_size) + 1) * is_cannon_group_leader,
-                global_rank,
-                &cannon_groups_leaders_comm
-            ));
-        } else {
-            cannon_groups_leaders_comm = MPI_COMM_NULL;
-        }
+        MPI_CHECK(MPI_Comm_split(
+            MPI_COMM_WORLD,
+                // all non-leaders get color 0, all leaders get color equal to idx of their pk_group.
+            is_cannon_group_leader ? (global_rank / pk_group_size) : MPI_UNDEFINED,
+            global_rank,
+            &cannon_groups_leaders_comm
+        ));
+        if (is_cannon_group_leader)
+            MPI_CHECK(MPI_Comm_rank(cannon_groups_leaders_comm, &cannon_groups_leaders_rank));
     }
 
     void print() const
