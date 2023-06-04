@@ -199,21 +199,20 @@ struct Config
 
     void print() const
     {
-        printf("\n\tCONFIG: n=%i, m=%i, k=%i, p=%i ---> p_m=%i, p_n=%i, p_k=%i, p_all=%i (prod:"
+        printf("\n\tCONFIG: GLOBAL: n=%i, m=%i, k=%i, p=%i ---> p_m=%i, p_n=%i, p_k=%i, p_all=%i (prod:"
                "%i, sum: %i), k_padded=%i, m_padded=%i, n_padded=%i, "
-               "global_rank=%i, gidx=%i, pillars_per_pk_group=%i, "
-               "pk_group_size=%i, pk_group_rank=%i, "
-               "cannon_groups_num=%i, cannon_group_size=%i, cannon_group_rank=%i, "
-               "left_neigh_rank=%i, left_neigh_rank=%i, up_neigh_rank=%i, down_neigh_rank=%i, "
-               "procs_num_per_chunk_along_k=%i, chunk_a_vertical_len=%i, chunk_b_horizontal_len=%i, chunk_along_k_len=%i\n",
+               "pillars_per_pk_group=%i, pk_group_size=%i, "
+               "cannon_groups_num=%i, cannon_group_size=%i, "
+               "procs_num_per_chunk_along_k=%i, chunk_a_vertical_len=%i, chunk_b_horizontal_len=%i, chunk_along_k_len=%i, "
+               "LOCAL: global_rank=%i, gidx=%i, pk_group_rank=%i, cannon_group_rank=%i, "
+               "left_neigh_rank=%i, right_neigh_rank=%i, up_neigh_rank=%i, down_neigh_rank=%i\n",
                n, m, k, p, p_m, p_n, p_k, p_all, p_n * p_m * p_k,
                minimised_sum(m, n, k, p_m, p_n, p_k), k_padded, m_padded, n_padded,
-               global_rank,
-               gidx, pillars_per_pk_group,
-               pk_group_size, pk_group_rank,
-               cannon_groups_num, cannon_group_size, cannon_group_rank,
-               left_neigh_rank, right_neigh_rank, up_neigh_rank, down_neigh_rank,
-               procs_num_per_chunk_along_k, chunk_a_vertical_len, chunk_b_horizontal_len, chunk_along_k_len
+               pillars_per_pk_group, pk_group_size,
+               cannon_groups_num, cannon_group_size,
+               procs_num_per_chunk_along_k, chunk_a_vertical_len, chunk_b_horizontal_len, chunk_along_k_len,
+               global_rank, gidx, pk_group_rank, cannon_group_rank,
+               left_neigh_rank, right_neigh_rank, up_neigh_rank, down_neigh_rank
         );
     }
 
