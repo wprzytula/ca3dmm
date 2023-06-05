@@ -50,10 +50,10 @@ inline void __check_mpi_error(const char *file, const int line, const int n)
     }
 }
 
-void print_array(f const *arr, int const len) {
-    printf("Array: \n");
+void print_array(char const *name, f const *arr, int const len) {
+    printf("Array %s: \n", name);
     for (int i = 0; i < len; ++i) {
-        printf("%f ", arr[i]);
+        printf("%.1f ", arr[i]);
     }
     printf("\n");
 }
@@ -163,8 +163,10 @@ struct Config
 
         gidx = global_rank / pk_group_procs_num;
 
-        if (unused)
+        if (unused) {
+            printf("Process %i: unused, early return.", global_rank);
             return;
+        }
 
         MPI_CHECK(MPI_Comm_split(
             MPI_COMM_WORLD,
@@ -282,6 +284,7 @@ struct Config
         );
     }
 
+/* CANNON ALGORITHM */
     void preskew_A(f *buf) const {
         int preskew_dest, preskew_src;
         MPI_Cart_shift(
@@ -359,9 +362,8 @@ struct Config
         }
     }
 
-
+/* MATRIX GENERATION AND DISTRIBUTION */
     void generate_matrix_A_part(f *A, int const seed, int const pk_group_idx) const {
-        // bool const cannon_groups_are_horizontal = p_n >= p_m;
         int const chunk_size = chunk_a_vertical_len * chunk_along_k_len;
 
         for (int r = 0; r < m_padded; r++) {
@@ -393,6 +395,110 @@ struct Config
         }
     }
 
+    void generate_matrix_B_part(f *B, int const seed, int const pk_group_idx) const {
+        int const chunk_size = chunk_b_horizontal_len * chunk_along_k_len;
+
+        for (int r = 0; r < n_padded; r++) {
+            for (int c = 0; c < pillars_per_pk_group; c++) {
+                int const real_matrix_row = r;
+                int const real_matrix_col = pk_group_idx * pillars_per_pk_group + c;
+                bool const out_of_bounds = r >= n || c >= k;
+                const f entry = out_of_bounds ?
+                    ({
+                        // printf("Generating 0 for B[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        0;
+                    }) :
+                    ({
+                        // printf("Generating entry for B[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        generate_double(seed, real_matrix_row, real_matrix_col);
+                    });
+
+                int const chunk_col = c / chunk_along_k_len;
+                int const chunk_col_offset = c % chunk_along_k_len;
+                int const chunk_row = r / chunk_b_horizontal_len;
+                int const chunk_row_offset = r % chunk_b_horizontal_len;
+                int const chunk_idx = chunk_col * p_n + chunk_row;
+                int const chunk_offset = chunk_row_offset * chunk_along_k_len + chunk_col_offset;
+
+                // printf("Placing entry in chunk no %i, at offset %i: B[%i]\n",
+                //         chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
+                B[chunk_idx * chunk_size + chunk_offset] = entry;
+            }
+        }
+    }
+
+    void distribute_to_pk_groups(
+        f *A_B_chunks,
+        int const seed,
+        int const pk_group_vals,
+        char const *name,
+        void (Config::*generate)(f*, int, int) const
+    ) const {
+        if (global_rank == 0) {
+            for (int pk_group_idx = 1; pk_group_idx < p_k; ++pk_group_idx) {
+                generate_matrix_A_part(A_B_chunks, seed, pk_group_idx);
+                MPI_CHECK(MPI_Send(
+                    A_B_chunks,
+                    pk_group_vals,
+                    MPI_DOUBLE,
+                    pk_group_idx,
+                    0,
+                    pk_groups_leaders_comm
+                ));
+            }
+            (this->*generate)(A_B_chunks, seed, 0);
+            print_array(name, A_B_chunks, pk_group_vals);
+        } else if (pk_group_rank == 0) {
+            MPI_CHECK(MPI_Recv(
+                A_B_chunks,
+                pk_group_vals,
+                MPI_DOUBLE,
+                0,
+                0,
+                pk_groups_leaders_comm,
+                MPI_STATUS_IGNORE
+            ));
+            print_array(name, A_B_chunks, pk_group_vals);
+        }
+    }
+
+    void distribute_A_to_pk_groups(f *A_B_chunks, int const seed_a) const {
+        int const pk_group_vals_a = pillars_per_pk_group * m_padded;
+        distribute_to_pk_groups(A_B_chunks, seed_a, pk_group_vals_a, "A chunks for pk_group", &Config::generate_matrix_A_part);
+    }
+
+    void distribute_B_to_pk_groups(f *A_B_chunks, int const seed_b) const {
+        int const pk_group_vals_b = pillars_per_pk_group * n_padded;
+        distribute_to_pk_groups(A_B_chunks, seed_b, pk_group_vals_b, "B chunks for pk_group", &Config::generate_matrix_B_part);
+    }
+
+    void distribute_to_cannon_groups(f *A_B_chunks, int const count) const {
+        /* Distribute to cannon groups */
+        if (cannon_groups_num > 1 && cannon_groups_leaders_comm != MPI_COMM_NULL) {
+            MPI_CHECK(MPI_Bcast(
+                A_B_chunks,
+                count,
+                MPI_DOUBLE,
+                0,
+                cannon_groups_leaders_comm
+            ));
+        }
+    }
+
+    void distribute_in_cannon_groups(f const* A_B_chunks, f *chunk, int const chunk_size) const {
+        MPI_CHECK(MPI_Scatter(
+            A_B_chunks,
+            chunk_size,
+            MPI_DOUBLE,
+            chunk,
+            chunk_size,
+            MPI_DOUBLE,
+            0,
+            cannon_group_comm
+        ));
+    }
+
+/* COMPLETE ALGORITHM */
     void multiply(int const seed_a, int const seed_b, bool const verbose,
                   bool const ge, double const ge_value) const
     {
@@ -405,78 +511,57 @@ struct Config
     // 5. Perform the Cannon's algorithm in each Cannon group and in each of the pk groups to get Ci.
     // 6. Reduce C=∑ki=1Ci.
 
-
-    // 2. Organize processes into pk groups, each group has pm×pn processes.
-
+        if (global_rank == 0) {
+            print();
+        }
 
         /* Distribute to pk groups */
         // matrix A
         int const pk_group_vals_a = pillars_per_pk_group * m_padded;
+        int const pk_group_vals_b = pillars_per_pk_group * n_padded;
         int const a_chunk_size = chunk_a_vertical_len * chunk_along_k_len;
-        std::unique_ptr<f[]> A{new f[pk_group_vals_a]};
+        int const b_chunk_size = chunk_b_horizontal_len * chunk_along_k_len;
+        int const c_chunk_size = chunk_a_vertical_len * chunk_b_horizontal_len;
+
+        std::unique_ptr<f[]> A_B_chunks;
+        if (is_cannon_group_leader) {
+            A_B_chunks = std::make_unique<f[]>(std::max(pk_group_vals_a, pk_group_vals_b));
+        }
         std::unique_ptr<f[]> A_chunk{new f[a_chunk_size]};
+        std::unique_ptr<f[]> B_chunk{new f[b_chunk_size]};
+        std::unique_ptr<f[]> C_chunk{new f[c_chunk_size]()};
 
-        if (global_rank == 0) {
-            print();
-            for (int pk_group_idx = 1; pk_group_idx < p_k; ++pk_group_idx) {
-                generate_matrix_A_part(A.get(), seed_a, pk_group_idx);
-                MPI_CHECK(MPI_Send(
-                    A.get(),
-                    pk_group_vals_a,
-                    MPI_DOUBLE,
-                    pk_group_idx,
-                    0,
-                    pk_groups_leaders_comm
-                ));
-            }
-            generate_matrix_A_part(A.get(), seed_a, 0);
-            print_array(A.get(), pk_group_vals_a);
-        } else if (pk_group_rank == 0) {
-            MPI_CHECK(MPI_Recv(
-                A.get(),
-                pk_group_vals_a,
-                MPI_DOUBLE,
-                0,
-                0,
-                pk_groups_leaders_comm,
-                MPI_STATUS_IGNORE
-            ));
-            print_array(A.get(), pk_group_vals_a);
+        {
+            f *chunks = A_B_chunks.get();
+            distribute_A_to_pk_groups(chunks, seed_a);
+            distribute_to_cannon_groups(chunks, pk_group_vals_a);
+            distribute_in_cannon_groups(chunks, A_chunk.get(), a_chunk_size);
+            printf("p%i: ", global_rank); print_array("A chunk", A_chunk.get(), a_chunk_size);
+
+            distribute_B_to_pk_groups(chunks, seed_b);
+            distribute_to_cannon_groups(chunks, pk_group_vals_b);
+            distribute_in_cannon_groups(chunks, B_chunk.get(), b_chunk_size);
+            printf("p%i: ", global_rank); print_array("B chunk", B_chunk.get(), b_chunk_size);
         }
 
-        /* Distribute to cannon groups */
-        if (cannon_groups_num > 1 && cannon_groups_leaders_comm != MPI_COMM_NULL) {
-            MPI_CHECK(MPI_Bcast(
-                A.get(),
-                pk_group_vals_a,
+
+        /* Perform Cannon algorithm */
+        cannon_algorithm(A_chunk.get(), B_chunk.get(), C_chunk.get());
+
+        /* Reduce matrix C to pk_group 0. */
+        if (pk_groups_num > 1) {
+            MPI_CHECK(MPI_Allreduce(
+                MPI_IN_PLACE,
+                C_chunk.get(),
+                c_chunk_size,
                 MPI_DOUBLE,
-                0,
-                cannon_groups_leaders_comm
+                MPI_SUM,
+                pk_group_counterparts_comm
             ));
-            // if (pk_groups_leaders_comm == MPI_COMM_NULL)
-            //     print_array(A.get(), pk_group_vals_a);
         }
-
-        MPI_CHECK(MPI_Scatter(
-            A.get(),
-            a_chunk_size,
-            MPI_DOUBLE,
-            A_chunk.get(),
-            a_chunk_size,
-            MPI_DOUBLE,
-            0,
-            cannon_group_comm
-        ));
-
-        printf("p%i: ", global_rank); print_array(A_chunk.get(), a_chunk_size);
+        // At this point, the whole C is distributed among all pk_groups.
     }
-
 };
-
-void usage(char const *progname)
-{
-    std::cerr << "Usage: " << progname << " n m k -s seeds [-g ge_value] [-v]\n";
-}
 } // namespace
 
 #ifdef TEST
@@ -508,6 +593,11 @@ int main(int argc, char *argv[])
 }
 
 #else
+static void usage(char const *progname)
+{
+    std::cerr << "Usage: " << progname << " n m k -s seeds [-g ge_value] [-v]\n";
+}
+
 int main(int argc, char *argv[])
 {
     int p = 0;
