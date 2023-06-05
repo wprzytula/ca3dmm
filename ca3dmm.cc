@@ -498,6 +498,86 @@ struct Config
         ));
     }
 
+    int compute_ge(f const* C_chunk, f const ge_val) const {
+        // Compute locally
+        int const c_chunk_size = chunk_a_vertical_len * chunk_b_horizontal_len;
+        int count = 0;
+        // TODO: don't count padding zeros
+        for (int i = 0; i < c_chunk_size; ++i) {
+            if (C_chunk[i] >= ge_val) {
+                ++count;
+            }
+        }
+
+        // Reduce in pk_groups
+        if (pk_groups_num > 1) {
+            MPI_CHECK(MPI_Allreduce(
+                MPI_IN_PLACE,
+                &count,
+                1,
+                MPI_INT,
+                MPI_SUM,
+                pk_group_comm
+            ));
+        }
+        // Now, `count` contains the answer.
+        return count;
+    }
+
+    int expected_ge(int const seed_a, int const seed_b, f const ge_value) const {
+        // Step 1: Allocate and populate matrices A and B
+        std::vector<std::vector<f>> A(m, std::vector<f>(k));
+        std::vector<std::vector<f>> B(k, std::vector<f>(n));
+
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < k; ++j) {
+                A[i][j] = generate_double(seed_a, i, j);
+            }
+        }
+
+        for (int i = 0; i < k; ++i) {
+            for (int j = 0; j < n; ++j) {
+                B[i][j] = generate_double(seed_b, i, j);
+            }
+        }
+
+        // Step 2: Allocate matrix C
+        std::vector<std::vector<f>> C(m, std::vector<f>(n));
+
+        // Step 3: Multiply matrices A and B to obtain C
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                f sum = 0.0;
+                for (int r = 0; r < k; ++r) {
+                    sum += A[i][r] * B[r][j];
+                }
+                C[i][j] = sum;
+            }
+        }
+
+        // Step 4: Count the number of elements in C >= ge
+        int count = 0;  // Counter for the elements
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                if (C[i][j] >= ge_value) {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+
+        // Output matrix C
+        // std::cout << "Matrix C:" << std::endl;
+        // for (int i = 0; i < m; ++i) {
+        //     for (int j = 0; j < n; ++j) {
+        //         std::cout << C[i][j] << " ";
+        //     }
+        //     std::cout << std::endl;
+        // }
+
+    }
+
 /* COMPLETE ALGORITHM */
     void multiply(int const seed_a, int const seed_b, bool const verbose,
                   bool const ge, double const ge_value) const
@@ -560,6 +640,18 @@ struct Config
             ));
         }
         // At this point, the whole C is distributed among all pk_groups.
+
+        if (ge) {
+            int const computed = compute_ge(C_chunk.get(), ge_value);
+            int const expected = expected_ge(seed_a, seed_b, ge_value);
+            if (computed == expected ) {
+                if (global_rank == 0)
+                    printf("computed ge=%i\n", computed);
+            } else {
+                printf("GE MISMATCH!: expected=%i, computed=%i\n", expected, computed);
+            }
+
+        }
     }
 };
 } // namespace
