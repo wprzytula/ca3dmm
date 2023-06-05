@@ -89,6 +89,8 @@ struct Config
     int pk_groups_leaders_rank = -1;
     int cannon_groups_leaders_rank = -1;
 
+    bool is_cannon_group_leader = false;
+
     static int minimised_sum(int const m, int const n, int const k, int const p_m, int const p_n, int const p_k) {
         return p_m * k * n + p_n * m * k + p_k * m * n;
     }
@@ -227,7 +229,7 @@ struct Config
             pk_groups_leaders_comm = MPI_COMM_NULL;
         }
 
-        bool const is_cannon_group_leader = global_rank % cannon_group_size == 0;
+        is_cannon_group_leader = global_rank % cannon_group_size == 0;
         MPI_CHECK(MPI_Comm_split(
             MPI_COMM_WORLD,
                 // all non-leaders get color 0, all leaders get color equal to idx of their pk_group.
@@ -267,7 +269,7 @@ struct Config
                "procs_num_per_chunk_along_k=%i," SEP "chunk_a_vertical_len=%i," SEP "chunk_b_horizontal_len=%i," SEP "chunk_along_k_len=%i," SEP
                "\tLOCAL:" SEP "global_rank=%i," SEP "gidx=%i," SEP "pk_group_rank=%i," SEP "cannon_group_rank=%i," SEP
                "left_neigh_rank=%i," SEP "right_neigh_rank=%i," SEP "up_neigh_rank=%i," SEP "down_neigh_rank=%i," SEP
-               "pk_groups_leaders_rank=%i," SEP "cannon_groups_leaders_rank=%i\n",
+               "pk_groups_leaders_rank=%i," SEP "cannon_groups_leaders_rank=%i\n\n",
                n, m, k, p, p_m, p_n, p_k, p_all,
                p_n * p_m * p_k, minimised_sum(m, n, k, p_m, p_n, p_k),
                k_padded, m_padded, n_padded,
