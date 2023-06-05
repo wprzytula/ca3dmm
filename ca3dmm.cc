@@ -546,6 +546,13 @@ int main(int argc, char *argv[])
         }
     }
 
+    double const ge_value = ge_value_str ? std::stod(ge_value_str) : 0.;
+    if (ge_value_str != nullptr && verbose) {
+        std::cerr << "Bad combination of optargs: -g and -v are mutually-exclusive." << '\n';
+        MPI_CHECK(MPI_Finalize());
+        return 1;
+    }
+
     // Parse remaining positional arguments n, m, and k
     if (optind + 2 > argc)
     {
@@ -557,8 +564,6 @@ int main(int argc, char *argv[])
     n = std::stoi(argv[optind++]);
     m = std::stoi(argv[optind++]);
     k = std::stoi(argv[optind++]);
-
-    double const ge_value = ge_value_str ? std::stod(ge_value_str) : 0.;
 
     Config const conf{n, m, k, p, rank};
     if (conf.unused) {
