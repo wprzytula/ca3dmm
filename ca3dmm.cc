@@ -290,7 +290,7 @@ struct Config
         MPI_Cart_shift(
             cannon_group_comm,
             0,
-            -cannon_coords[0], // left
+            -cannon_coords[1], // left
             &preskew_src,
             &preskew_dest
         );
@@ -312,7 +312,7 @@ struct Config
         MPI_Cart_shift(
             cannon_group_comm,
             1,
-            -cannon_coords[1], // up
+            -cannon_coords[0], // up
             &preskew_src,
             &preskew_dest
         );
@@ -354,7 +354,7 @@ struct Config
         preskew_A(A);
         preskew_B(B);
         multiply_locally(A, B, C);
-        for (int shift = 0; shift < cannon_group_dim; ++shift) {
+        for (int _shift = 1; _shift < cannon_group_dim; ++_shift) {
             // TODO: Init both async and wait for them
             cannon_step_A(A);
             cannon_step_B(B);
