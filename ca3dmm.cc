@@ -72,7 +72,7 @@ struct Config
     int gidx = -1;
 
     int global_rank, pk_group_rank = -1, cannon_group_rank = -1;
-    MPI_Comm pk_group_comm, cannon_group_comm, pk_groups_leaders_comm, cannon_groups_leaders_comm;
+    MPI_Comm pk_group_comm, cannon_group_comm, pk_groups_leaders_comm, cannon_groups_leaders_comm, pk_group_counterparts_comm;
     int pk_group_size = -1, cannon_group_size = -1, cannon_group_dim = -1;
     int cannon_groups_num = -1;
     int cannon_coords[2];
@@ -240,6 +240,20 @@ struct Config
         } else {
             cannon_groups_leaders_comm = MPI_COMM_NULL;
         }
+
+        /* Results reduction communication */
+        MPI_CHECK(MPI_Comm_split(
+            MPI_COMM_WORLD,
+            global_rank % pk_group_size,
+            global_rank,
+            &pk_group_counterparts_comm
+        ));
+        {
+            int sz;
+            MPI_CHECK(MPI_Comm_size(pk_group_counterparts_comm, &sz));
+            assert(sz == pk_groups_num);
+        }
+
     }
 
 #define SEP "\n"
