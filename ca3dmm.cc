@@ -447,7 +447,7 @@ struct Config
                 ));
             }
             (this->*generate)(A_B_chunks, seed, 0);
-            print_array(name, A_B_chunks, pk_group_vals);
+            // print_array(name, A_B_chunks, pk_group_vals);
         } else if (pk_group_rank == 0) {
             MPI_CHECK(MPI_Recv(
                 A_B_chunks,
@@ -458,7 +458,7 @@ struct Config
                 pk_groups_leaders_comm,
                 MPI_STATUS_IGNORE
             ));
-            print_array(name, A_B_chunks, pk_group_vals);
+            // print_array(name, A_B_chunks, pk_group_vals);
         }
     }
 
@@ -472,12 +472,26 @@ struct Config
         distribute_to_pk_groups(A_B_chunks, seed_b, pk_group_vals_b, "B chunks for pk_group", &Config::generate_matrix_B_part);
     }
 
-    void distribute_to_cannon_groups(f *A_B_chunks, int const count) const {
-        /* Distribute to cannon groups */
-        if (cannon_groups_num > 1 && cannon_groups_leaders_comm != MPI_COMM_NULL) {
+    void replicate_among_cannon_groups(f *A_B_chunks, int const cannon_group_chunks_size) const {
+        if (cannon_groups_leaders_comm != MPI_COMM_NULL) {
             MPI_CHECK(MPI_Bcast(
                 A_B_chunks,
-                count,
+                cannon_group_chunks_size,
+                MPI_DOUBLE,
+                0,
+                cannon_groups_leaders_comm
+            ));
+        }
+    }
+
+    void distribute_among_cannon_groups(f *A_B_chunks, int const cannon_group_chunks_size) const {
+        if (cannon_groups_leaders_comm != MPI_COMM_NULL) {
+            MPI_CHECK(MPI_Scatter(
+                A_B_chunks,
+                cannon_group_chunks_size,
+                MPI_DOUBLE,
+                A_B_chunks,
+                cannon_group_chunks_size,
                 MPI_DOUBLE,
                 0,
                 cannon_groups_leaders_comm
@@ -648,12 +662,11 @@ struct Config
     // 5. Perform the Cannon's algorithm in each Cannon group and in each of the pk groups to get Ci.
     // 6. Reduce C=∑ki=1Ci.
 
-        if (global_rank == 0) {
-            print();
-        }
+        // if (global_rank == 0) {
+        //     print();
+        // }
 
         /* Distribute to pk groups */
-        // matrix A
         int const pk_group_vals_a = pillars_per_pk_group * m_padded;
         int const pk_group_vals_b = pillars_per_pk_group * n_padded;
         int const a_chunk_size = chunk_a_vertical_len * chunk_along_k_len;
@@ -670,15 +683,29 @@ struct Config
 
         {
             f *chunks = A_B_chunks.get();
+            bool const cannon_groups_placed_horizontally = p_m < p_n;
+
             distribute_A_to_pk_groups(chunks, seed_a);
-            distribute_to_cannon_groups(chunks, pk_group_vals_a);
+            if (cannon_groups_num > 1) {
+                if (cannon_groups_placed_horizontally) {
+                    replicate_among_cannon_groups(chunks, pk_group_vals_a);
+                } else {
+                    distribute_among_cannon_groups(chunks, pk_group_vals_a / cannon_groups_num);
+                }
+            }
             distribute_in_cannon_groups(chunks, A_chunk.get(), a_chunk_size);
-            printf("p%i: ", global_rank); print_array("A chunk", A_chunk.get(), a_chunk_size);
+            // printf("p%i: ", global_rank); print_array("A chunk", A_chunk.get(), a_chunk_size);
 
             distribute_B_to_pk_groups(chunks, seed_b);
-            distribute_to_cannon_groups(chunks, pk_group_vals_b);
+            if (cannon_groups_num > 1) {
+                if (!cannon_groups_placed_horizontally) {
+                    replicate_among_cannon_groups(chunks, pk_group_vals_b);
+                } else {
+                    distribute_among_cannon_groups(chunks, pk_group_vals_b / cannon_groups_num);
+                }
+            }
             distribute_in_cannon_groups(chunks, B_chunk.get(), b_chunk_size);
-            printf("p%i: ", global_rank); print_array("B chunk", B_chunk.get(), b_chunk_size);
+            // printf("p%i: ", global_rank); print_array("B chunk", B_chunk.get(), b_chunk_size);
         }
 
 
