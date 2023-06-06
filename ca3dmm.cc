@@ -379,7 +379,7 @@ struct Config
         // Multiply locally
         for (int i = 0; i < chunk_a_vertical_len; ++i) {
             for (int j = 0; j < chunk_b_horizontal_len; ++j) {
-                int sum = 0;
+                f sum = 0;
                 for (int k = 0; k < chunk_along_k_len; ++k) {
                     sum += A[i * chunk_along_k_len + k] * B[j * chunk_along_k_len + k];
                 }
