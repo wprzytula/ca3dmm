@@ -537,7 +537,7 @@ struct Config
         return count;
     }
 
-    int expected_ge(int const seed_a, int const seed_b, f const ge_value) const {
+    std::vector<std::vector<f>> compute_expected_C(int const seed_a, int const seed_b) const {
         // Step 1: Allocate and populate matrices A and B
         std::vector<std::vector<f>> A(m, std::vector<f>(k));
         std::vector<std::vector<f>> B(k, std::vector<f>(n));
@@ -568,6 +568,48 @@ struct Config
             }
         }
 
+        return C;
+    }
+
+    void print_result_matrix(f const *C_chunk) const {
+        // For row in C matrix:
+        std::unique_ptr<f[]> chunk_row_up{new f[chunk_b_horizontal_len]};
+        for (int r = 0; r < m; ++r) {
+            // For chunk row in row:
+            for (int chunk_col_idx = 0; chunk_col_idx < p_n; ++chunk_col_idx) {
+                // Find the owner of the chunk row.
+                int const owner_pk_group_rank = chunk_col_idx * p_m + r / chunk_a_vertical_len;
+
+                f *chunk_row;
+                if (owner_pk_group_rank == pk_group_rank) {
+                    // If I own this row, broadcast to others
+                    int const row_offset_in_chunk = r % chunk_a_vertical_len * chunk_b_horizontal_len;
+                    chunk_row = std::remove_const_t<f*>(C_chunk + row_offset_in_chunk);
+                } else {
+                    chunk_row = chunk_row_up.get();
+                }
+
+                // Broadcast chunk row.
+                MPI_CHECK(MPI_Bcast(
+                    chunk_row,
+                    chunk_b_horizontal_len,
+                    MPI_DOUBLE,
+                    owner_pk_group_rank,
+                    pk_group_comm
+                ));
+
+                // For elem in chunk row:
+                for (int i = 0; i < chunk_b_horizontal_len; ++i) {
+                    // Print elem
+                    printf("%f ", chunk_row[i]);
+                }
+                // Print newline
+                printf("\n");
+            }
+        }
+    }
+
+    int expected_ge(std::vector<std::vector<f>> const& C, f const ge_value) const {
         // Step 4: Count the number of elements in C >= ge
         int count = 0;  // Counter for the elements
         for (int i = 0; i < m; ++i) {
@@ -579,16 +621,18 @@ struct Config
         }
 
         return count;
+    }
 
-        // Output matrix C
-        // std::cout << "Matrix C:" << std::endl;
-        // for (int i = 0; i < m; ++i) {
-        //     for (int j = 0; j < n; ++j) {
-        //         std::cout << C[i][j] << " ";
-        //     }
-        //     std::cout << std::endl;
-        // }
-
+    void print_expected_c(std::vector<std::vector<f>> const& C) const {
+        int const rows = C.size();
+        int const cols = C[0].size();
+        printf("%d %d\n", rows, cols);
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                printf("%f ", C[i][j]);
+            }
+            printf("\n");
+        }
     }
 
 /* COMPLETE ALGORITHM */
@@ -654,16 +698,22 @@ struct Config
         }
         // At this point, the whole C is distributed among all pk_groups.
 
+        auto const expected_C = compute_expected_C(seed_a, seed_b);
         if (ge) {
             int const computed = compute_ge(C_chunk.get(), ge_value);
-            int const expected = expected_ge(seed_a, seed_b, ge_value);
+            int const expected = expected_ge(expected_C, ge_value);
             if (computed == expected ) {
                 if (global_rank == 0)
                     printf("computed ge=%i\n", computed);
             } else {
-                printf("GE MISMATCH!: expected=%i, computed=%i\n", expected, computed);
+                printf("GE MISMATCH!: rank %i, expected=%i, computed=%i\n", global_rank, expected, computed);
             }
+        } else if (verbose) {
+            printf("Expected matrix:\n");
+            print_expected_c(expected_C);
 
+            printf("Computed matrix:\n");
+            print_result_matrix(C_chunk.get());
         }
     }
 };
