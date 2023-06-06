@@ -501,25 +501,38 @@ struct Config
     int compute_ge(f const* C_chunk, f const ge_val) const {
         // Compute locally
         int const c_chunk_size = chunk_a_vertical_len * chunk_b_horizontal_len;
+
+        int const chunk_row_idx = global_rank % p_m;
+        int const chunk_col_idx = global_rank / p_m;
+
+        int const chunk_row_offset = chunk_row_idx * chunk_a_vertical_len;
+        int const chunk_col_offset = chunk_col_idx * chunk_b_horizontal_len;
+        // printf("rank %i: chunk idx: (row=%i, col=%i), offset: (row=%i, col=%i)\n",
+        //     global_rank, chunk_row_idx, chunk_col_idx, chunk_row_offset, chunk_col_offset
+        // );
+
+        // TODO: fix case: --np 2 build/ca3dmm 6 6 6 -s 3,2 -g 55
         int count = 0;
-        // TODO: don't count padding zeros
-        for (int i = 0; i < c_chunk_size; ++i) {
-            if (C_chunk[i] >= ge_val) {
-                ++count;
+        for (int i = 0; i < chunk_a_vertical_len; ++i) {
+            if (chunk_row_offset + i >= m) break; // out of bounds
+            for (int j = 0; j < chunk_b_horizontal_len; ++j) {
+                if (chunk_col_offset + j >= n) break; // out of bounds
+                if (C_chunk[i * chunk_b_horizontal_len + j] >= ge_val) {
+                    ++count;
+                }
             }
         }
 
         // Reduce in pk_groups
-        if (pk_groups_num > 1) {
-            MPI_CHECK(MPI_Allreduce(
-                MPI_IN_PLACE,
-                &count,
-                1,
-                MPI_INT,
-                MPI_SUM,
-                pk_group_comm
-            ));
-        }
+        MPI_CHECK(MPI_Allreduce(
+            MPI_IN_PLACE,
+            &count,
+            1,
+            MPI_INT,
+            MPI_SUM,
+            MPI_COMM_WORLD
+        ));
+
         // Now, `count` contains the answer.
         return count;
     }
