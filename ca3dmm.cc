@@ -9,6 +9,12 @@
 #include <cmath>
 #include <memory>
 
+#ifdef PRINT
+#define debug(x) x
+#else
+#define debug(x)
+#endif
+
 using f = double;
 
 namespace {
@@ -300,6 +306,9 @@ struct Config
             &preskew_src,
             &preskew_dest
         );
+        debug(
+            printf("Issuing Preskew A Sendrecv_replace in pkgroup %i: %i <- %i <- %i\n", gidx, preskew_dest, cannon_group_rank, preskew_src);
+        )
         MPI_Sendrecv_replace(
             buf,
             chunk_a_vertical_len * chunk_along_k_len,
@@ -311,6 +320,9 @@ struct Config
             cannon_group_comm,
             MPI_STATUS_IGNORE
         );
+        debug(
+            printf("Completed Preskew A Sendrecv_replace in pkgroup %i: %i <- %i <- %i\n", gidx, preskew_dest, cannon_group_rank, preskew_src);
+        )
     }
 
     void preskew_B(f *buf) const {
@@ -322,6 +334,9 @@ struct Config
             &preskew_src,
             &preskew_dest
         );
+        debug(
+            printf("Issuing Preskew B Sendrecv_replace in pkgroup %i: %i <- %i <- %i\n", gidx, preskew_dest, cannon_group_rank, preskew_src);
+        )
         MPI_Sendrecv_replace(
             buf,
             chunk_b_horizontal_len * chunk_along_k_len,
@@ -333,14 +348,29 @@ struct Config
             cannon_group_comm,
             MPI_STATUS_IGNORE
         );
+        debug(
+            printf("Completed Preskew B Sendrecv_replace in pkgroup %i: %i <- %i <- %i\n", gidx, preskew_dest, cannon_group_rank, preskew_src);
+        )
     }
 
     void cannon_step_A(f *buf) const {
+        debug(
+            printf("Issuing A Sendrecv_replace in pkgroup %i: %i <- %i <- %i\n", gidx, left_neigh_rank, cannon_group_rank, right_neigh_rank);
+        )
 		MPI_Sendrecv_replace(buf, chunk_a_vertical_len * chunk_along_k_len, MPI_DOUBLE, left_neigh_rank, 0, right_neigh_rank, 0, cannon_group_comm, MPI_STATUS_IGNORE);
+        debug(
+            printf("Completed A Sendrecv_replace in pkgroup %i: %i <- %i <- %i\n", gidx, left_neigh_rank, cannon_group_rank, right_neigh_rank);
+        )
     }
 
     void cannon_step_B(f *buf) const {
+        debug(
+            printf("Issuing B Sendrecv_replace in pkgroup %i: %i <- %i <- %i\n", gidx, up_neigh_rank, cannon_group_rank, down_neigh_rank);
+        )
         MPI_Sendrecv_replace(buf, chunk_b_horizontal_len * chunk_along_k_len, MPI_DOUBLE, up_neigh_rank, 0, down_neigh_rank, 0, cannon_group_comm, MPI_STATUS_IGNORE);
+        debug(
+            printf("Completed B Sendrecv_replace in pkgroup %i: %i <- %i <- %i\n", gidx, up_neigh_rank, cannon_group_rank, down_neigh_rank);
+        )
     }
 
     void multiply_locally(f const *A, f const *B, f *C) const {
@@ -358,7 +388,13 @@ struct Config
 
     void cannon_algorithm(f *A, f *B, f *C) const {
         preskew_A(A);
+        debug(
+            print_array("A chunk after preskew", A, a_chunk_size);
+        )
         preskew_B(B);
+        debug(
+            print_array("B chunk after preskew", B, b_chunk_size);
+        )
         multiply_locally(A, B, C);
         for (int _shift = 1; _shift < cannon_group_dim; ++_shift) {
             // TODO: Init both async and wait for them
@@ -379,11 +415,15 @@ struct Config
                 bool const out_of_bounds = r >= m || c >= k;
                 const f entry = out_of_bounds ?
                     ({
-                        // printf("Generating 0 for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        debug(
+                            printf("Generating 0 for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        )
                         0;
                     }) :
                     ({
-                        // printf("Generating entry for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        debug(
+                            printf("Generating entry for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        )
                         generate_double(seed, real_matrix_row, real_matrix_col);
                     });
 
@@ -394,8 +434,10 @@ struct Config
                 int const chunk_idx = chunk_col * p_m + chunk_row;
                 int const chunk_offset = chunk_row_offset * chunk_along_k_len + chunk_col_offset;
 
-                // printf("Placing entry in chunk no %i, at offset %i: A[%i]\n",
-                //         chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
+                debug(
+                    printf("Placing entry in chunk no %i, at offset %i: A[%i]\n",
+                           chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
+                )
                 A[chunk_idx * chunk_size + chunk_offset] = entry;
             }
         }
@@ -411,11 +453,15 @@ struct Config
                 bool const out_of_bounds = r >= n || c >= k;
                 const f entry = out_of_bounds ?
                     ({
-                        // printf("Generating 0 for B[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        debug(
+                            printf("Generating 0 for B[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        )
                         0;
                     }) :
                     ({
-                        // printf("Generating entry for B[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        debug(
+                            printf("Generating entry for B[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        )
                         generate_double(seed, real_matrix_row, real_matrix_col);
                     });
 
@@ -426,8 +472,10 @@ struct Config
                 int const chunk_idx = chunk_col * p_n + chunk_row;
                 int const chunk_offset = chunk_row_offset * chunk_along_k_len + chunk_col_offset;
 
-                // printf("Placing entry %f in chunk no %i, at offset %i: B[%i]\n",
-                //         entry, chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
+                debug(
+                    printf("Placing entry %f in chunk no %i, at offset %i: B[%i]\n",
+                            entry, chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
+                )
                 B[chunk_idx * chunk_size + chunk_offset] = entry;
             }
         }
@@ -453,7 +501,9 @@ struct Config
                 ));
             }
             (this->*generate)(A_B_chunks, seed, 0);
-            // print_array(name, A_B_chunks, pk_group_vals);
+            debug(
+                print_array(name, A_B_chunks, pk_group_vals);
+            )
         } else if (pk_group_rank == 0) {
             MPI_CHECK(MPI_Recv(
                 A_B_chunks,
@@ -464,7 +514,9 @@ struct Config
                 pk_groups_leaders_comm,
                 MPI_STATUS_IGNORE
             ));
-            // print_array(name, A_B_chunks, pk_group_vals);
+            debug(
+                print_array(name, A_B_chunks, pk_group_vals);
+            )
         }
     }
 
@@ -506,6 +558,10 @@ struct Config
     }
 
     void distribute_in_cannon_groups(f const* A_B_chunks, f *chunk, int const chunk_size) const {
+        debug(
+            if (is_cannon_group_leader)
+                print_array("A/B chunks for my cannon group", A_B_chunks, chunk_size * cannon_groups_num);
+        )
         MPI_CHECK(MPI_Scatter(
             A_B_chunks,
             chunk_size,
@@ -516,6 +572,9 @@ struct Config
             0,
             cannon_group_comm
         ));
+        debug(
+            print_array("A/B chunk", chunk, chunk_size);
+        )
     }
 
     int compute_ge(f const* C_chunk, f const ge_val) const {
@@ -525,9 +584,11 @@ struct Config
 
         int const chunk_row_offset = chunk_row_idx * chunk_a_vertical_len;
         int const chunk_col_offset = chunk_col_idx * chunk_b_horizontal_len;
-        // printf("rank %i: chunk idx: (row=%i, col=%i), offset: (row=%i, col=%i)\n",
-        //     global_rank, chunk_row_idx, chunk_col_idx, chunk_row_offset, chunk_col_offset
-        // );
+        debug(
+            printf("rank %i: chunk idx: (row=%i, col=%i), offset: (row=%i, col=%i)\n",
+                global_rank, chunk_row_idx, chunk_col_idx, chunk_row_offset, chunk_col_offset
+            );
+        )
 
         // TODO: fix case: --np 2 build/ca3dmm 6 6 6 -s 3,2 -g 55
         int count = 0;
@@ -706,7 +767,9 @@ struct Config
                 }
             }
             distribute_in_cannon_groups(chunks, A_chunk.get(), a_chunk_size);
-            // printf("p%i: ", global_rank); print_array("A chunk", A_chunk.get(), a_chunk_size);
+            debug(
+                printf("p%i: ", global_rank); print_array("A chunk", A_chunk.get(), a_chunk_size);
+            )
 
             distribute_B_to_pk_groups(chunks, seed_b);
             if (cannon_groups_num > 1) {
@@ -717,7 +780,10 @@ struct Config
                 }
             }
             distribute_in_cannon_groups(chunks, B_chunk.get(), b_chunk_size);
-            // printf("p%i: ", global_rank); print_array("B chunk", B_chunk.get(), b_chunk_size);
+            debug(
+
+                printf("p%i: ", global_rank); print_array("B chunk", B_chunk.get(), b_chunk_size);
+            )
         }
 
 
@@ -745,22 +811,28 @@ struct Config
             int const computed = compute_ge(C_chunk.get(), ge_value);
             int const expected = expected_ge(expected_C, ge_value);
             if (computed == expected ) {
-                if (global_rank == 0)
-                    printf("computed ge=%i\n", computed);
+                if (global_rank == 0) {
+                    debug(
+                        printf("computed ge=%i\n", computed);
+                    )
+                    printf("%i\n", computed);
+                }
             } else {
-                printf("GE MISMATCH!: rank %i, expected=%i, computed=%i\n", global_rank, expected, computed);
+                fprintf(stderr, "GE MISMATCH!: rank %i, expected=%i, computed=%i\n", global_rank, expected, computed);
             }
         } else if (verbose) {
-            printf("A matrix:\n");
-            print_expected_matrix(expected_A);
+            debug({
+                printf("A matrix:\n");
+                print_expected_matrix(expected_A);
 
-            printf("B matrix:\n");
-            print_expected_matrix(expected_B);
+                printf("B matrix:\n");
+                print_expected_matrix(expected_B);
 
-            printf("Expected matrix:\n");
-            print_expected_matrix(expected_C);
+                printf("Expected matrix:\n");
+                print_expected_matrix(expected_C);
 
-            printf("Computed matrix:\n");
+                printf("Computed matrix:\n");
+            })
             print_result_matrix(C_chunk.get());
         }
     }
@@ -864,15 +936,16 @@ int main(int argc, char *argv[])
     if (conf.unused) {
         goto end;
     }
-    // conf.print();
 
     // Print the parsed values
-    // std::cout << "n: " << n << '\n';
-    // std::cout << "m: " << m << '\n';
-    // std::cout << "k: " << k << '\n';
-    // std::cout << "seeds: " << seeds << '\n';
-    // std::cout << "ge_value: " << ge_value << '\n';
-    // std::cout << "verbose: " << std::boolalpha << verbose << '\n';
+    debug(
+        std::cout << "n: " << n << '\n';
+        std::cout << "m: " << m << '\n';
+        std::cout << "k: " << k << '\n';
+        std::cout << "seeds: " << seeds << '\n';
+        std::cout << "ge_value: " << ge_value << '\n';
+        std::cout << "verbose: " << std::boolalpha << verbose << '\n';
+    )
 
     token = std::strtok(seeds, delim);
 
@@ -885,7 +958,9 @@ int main(int argc, char *argv[])
         {
             int second = std::stoi(token);
 
-            // std::cout << "Pair: " << first << delim << second << std::endl;
+            debug(
+                std::cout << "Pair: " << first << delim << second << std::endl;
+            )
             conf.multiply(first, second, verbose, !!ge_value_str, ge_value);
 
             token = std::strtok(nullptr, delim);
