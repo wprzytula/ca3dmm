@@ -555,10 +555,9 @@ struct Config
         return count;
     }
 
-    std::vector<std::vector<f>> compute_expected_C(int const seed_a, int const seed_b) const {
-        // Step 1: Allocate and populate matrices A and B
+    std::vector<std::vector<f>> populate_A(int const seed_a) const {
+        // Step 1: Allocate and populate matrix A
         std::vector<std::vector<f>> A(m, std::vector<f>(k));
-        std::vector<std::vector<f>> B(k, std::vector<f>(n));
 
         for (int i = 0; i < m; ++i) {
             for (int j = 0; j < k; ++j) {
@@ -566,12 +565,23 @@ struct Config
             }
         }
 
+        return A;
+    }
+
+    std::vector<std::vector<f>> populate_B(int const seed_b) const {
+        // Step 1: Allocate and populate matrix B
+        std::vector<std::vector<f>> B(k, std::vector<f>(n));
+
         for (int i = 0; i < k; ++i) {
             for (int j = 0; j < n; ++j) {
                 B[i][j] = generate_double(seed_b, i, j);
             }
         }
 
+        return B;
+    }
+
+    std::vector<std::vector<f>> compute_expected_C(std::vector<std::vector<f>> const& A, std::vector<std::vector<f>> const& B) const {
         // Step 2: Allocate matrix C
         std::vector<std::vector<f>> C(m, std::vector<f>(n));
 
@@ -642,13 +652,13 @@ struct Config
         return count;
     }
 
-    void print_expected_c(std::vector<std::vector<f>> const& C) const {
-        int const rows = C.size();
-        int const cols = C[0].size();
+    void print_expected_matrix(std::vector<std::vector<f>> const& M) const {
+        int const rows = M.size();
+        int const cols = M[0].size();
         printf("%d %d\n", rows, cols);
-        for (int i = 0; i < m; ++i) {
-            for (int j = 0; j < n; ++j) {
-                printf("%f ", C[i][j]);
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                printf("%f ", M[i][j]);
             }
             printf("\n");
         }
@@ -727,7 +737,10 @@ struct Config
         }
         // At this point, the whole C is distributed among all pk_groups.
 
-        auto const expected_C = compute_expected_C(seed_a, seed_b);
+        auto const expected_A = populate_A(seed_a);
+        auto const expected_B = populate_B(seed_b);
+        auto const expected_C = compute_expected_C(expected_A, expected_B);
+
         if (ge) {
             int const computed = compute_ge(C_chunk.get(), ge_value);
             int const expected = expected_ge(expected_C, ge_value);
@@ -738,8 +751,14 @@ struct Config
                 printf("GE MISMATCH!: rank %i, expected=%i, computed=%i\n", global_rank, expected, computed);
             }
         } else if (verbose) {
+            printf("A matrix:\n");
+            print_expected_matrix(expected_A);
+
+            printf("B matrix:\n");
+            print_expected_matrix(expected_B);
+
             printf("Expected matrix:\n");
-            print_expected_c(expected_C);
+            print_expected_matrix(expected_C);
 
             printf("Computed matrix:\n");
             print_result_matrix(C_chunk.get());
