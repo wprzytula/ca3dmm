@@ -80,6 +80,9 @@ struct Config
     int chunk_a_vertical_len = -1;
     int chunk_b_horizontal_len = -1;
     int chunk_along_k_len = -1;
+    int a_chunk_size = -1;
+    int b_chunk_size = -1;
+    int c_chunk_size = -1;
 
     int left_neigh_rank = -1;
     int right_neigh_rank = -1;
@@ -160,6 +163,9 @@ struct Config
         // k_padded = pad(k, p_k * procs_num_per_chunk_along_k);
         pillars_per_pk_group = norem_div(k_padded, p_k);
         chunk_along_k_len = norem_div(pillars_per_pk_group, procs_num_per_chunk_along_k);
+        a_chunk_size = chunk_a_vertical_len * chunk_along_k_len;
+        b_chunk_size = chunk_b_horizontal_len * chunk_along_k_len;
+        c_chunk_size = chunk_a_vertical_len * chunk_b_horizontal_len;
 
         gidx = global_rank / pk_group_procs_num;
 
@@ -514,8 +520,6 @@ struct Config
 
     int compute_ge(f const* C_chunk, f const ge_val) const {
         // Compute locally
-        int const c_chunk_size = chunk_a_vertical_len * chunk_b_horizontal_len;
-
         int const chunk_row_idx = global_rank % p_m;
         int const chunk_col_idx = global_rank / p_m;
 
@@ -669,9 +673,6 @@ struct Config
         /* Distribute to pk groups */
         int const pk_group_vals_a = pillars_per_pk_group * m_padded;
         int const pk_group_vals_b = pillars_per_pk_group * n_padded;
-        int const a_chunk_size = chunk_a_vertical_len * chunk_along_k_len;
-        int const b_chunk_size = chunk_b_horizontal_len * chunk_along_k_len;
-        int const c_chunk_size = chunk_a_vertical_len * chunk_b_horizontal_len;
 
         std::unique_ptr<f[]> A_B_chunks;
         if (is_cannon_group_leader) {
