@@ -406,8 +406,8 @@ struct Config
 
         for (int r = 0; r < n_padded; r++) {
             for (int c = 0; c < pillars_per_pk_group; c++) {
-                int const real_matrix_row = r;
-                int const real_matrix_col = pk_group_idx * pillars_per_pk_group + c;
+                int const real_matrix_row = pk_group_idx * pillars_per_pk_group + c;
+                int const real_matrix_col = r;
                 bool const out_of_bounds = r >= n || c >= k;
                 const f entry = out_of_bounds ?
                     ({
@@ -426,8 +426,8 @@ struct Config
                 int const chunk_idx = chunk_col * p_n + chunk_row;
                 int const chunk_offset = chunk_row_offset * chunk_along_k_len + chunk_col_offset;
 
-                // printf("Placing entry in chunk no %i, at offset %i: B[%i]\n",
-                //         chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
+                // printf("Placing entry %f in chunk no %i, at offset %i: B[%i]\n",
+                //         entry, chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
                 B[chunk_idx * chunk_size + chunk_offset] = entry;
             }
         }
