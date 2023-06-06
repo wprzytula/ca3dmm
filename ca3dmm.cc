@@ -176,7 +176,9 @@ struct Config
         gidx = global_rank / pk_group_procs_num;
 
         if (unused) {
-            printf("Process %i: unused, early return.", global_rank);
+            debug(
+                printf("Process %i: unused, early return.", global_rank);
+            )
             return;
         }
 
