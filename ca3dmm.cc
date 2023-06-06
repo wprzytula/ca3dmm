@@ -661,7 +661,8 @@ struct Config
     }
 
     void print_result_matrix(f const *C_chunk) const {
-        printf("%d %d\n", m, n);
+        if (global_rank == 0)
+            printf("%d %d\n", m, n);
         // For row in C matrix:
         std::unique_ptr<f[]> chunk_row_up{new f[chunk_b_horizontal_len]};
         for (int r = 0; r < m; ++r) {
@@ -688,14 +689,17 @@ struct Config
                     pk_group_comm
                 ));
 
-                // For elem in chunk row:
-                for (int i = 0; i < chunk_b_horizontal_len; ++i) {
-                    // Print elem
-                    printf("%f ", chunk_row[i]);
+                if (global_rank == 0) {
+                    // For elem in chunk row:
+                    for (int i = 0; i < chunk_b_horizontal_len; ++i) {
+                        // Print elem
+                        printf("%f ", chunk_row[i]);
+                    }
                 }
-                // Print newline
-                printf("\n");
             }
+            // Print newline at the row end
+            if (global_rank == 0)
+                printf("\n");
         }
     }
 
