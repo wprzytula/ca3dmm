@@ -448,37 +448,40 @@ struct Config
     void generate_matrix_B_part(f *B, int const seed, int const pk_group_idx) const {
         int const chunk_size = chunk_b_horizontal_len * chunk_along_k_len;
 
-        for (int r = 0; r < n_padded; r++) {
-            for (int c = 0; c < pillars_per_pk_group; c++) {
-                int const real_matrix_row = pk_group_idx * pillars_per_pk_group + c;
-                int const real_matrix_col = r;
-                bool const out_of_bounds = r >= n || c >= k;
-                const f entry = out_of_bounds ?
-                    ({
-                        debug(
-                            printf("Generating 0 for B[%i,%i]\n", real_matrix_row, real_matrix_col);
-                        )
-                        0;
-                    }) :
-                    ({
-                        debug(
-                            printf("Generating entry for B[%i,%i]\n", real_matrix_row, real_matrix_col);
-                        )
-                        generate_double(seed, real_matrix_row, real_matrix_col);
-                    });
+        for (int chunk_col = 0; chunk_col < p_n; ++chunk_col) {
+            for (int chunk_row = 0; chunk_row < procs_num_per_chunk_along_k; ++chunk_row) {
+                for (int chunk_col_offset = 0; chunk_col_offset < chunk_b_horizontal_len; chunk_col_offset++) {
+                    for (int chunk_row_offset = 0; chunk_row_offset < chunk_along_k_len; chunk_row_offset++) {
 
-                int const chunk_col = c / chunk_along_k_len;
-                int const chunk_col_offset = c % chunk_along_k_len;
-                int const chunk_row = r / chunk_b_horizontal_len;
-                int const chunk_row_offset = r % chunk_b_horizontal_len;
-                int const chunk_idx = chunk_col * p_n + chunk_row;
-                int const chunk_offset = chunk_row_offset * chunk_along_k_len + chunk_col_offset;
+                        int const real_matrix_row = pk_group_idx * pillars_per_pk_group + chunk_row * chunk_along_k_len + chunk_row_offset;
+                        int const real_matrix_col = chunk_col * chunk_b_horizontal_len + chunk_col_offset;
+                        bool const out_of_bounds = real_matrix_col >= n || real_matrix_row >= k;
 
-                debug(
-                    printf("Placing entry %f in chunk no %i, at offset %i: B[%i]\n",
-                            entry, chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
-                )
-                B[chunk_idx * chunk_size + chunk_offset] = entry;
+                        const f entry = out_of_bounds ?
+                            ({
+                                // debug(
+                                //     printf("Generating 0 for B[%i,%i]\n", real_matrix_row, real_matrix_col);
+                                // )
+                                0;
+                            }) :
+                            ({
+                                f const entry = generate_double(seed, real_matrix_row, real_matrix_col);
+                                // debug(
+                                //     printf("Generating entry=%3.0f for B[%i,%i]\n", entry, real_matrix_row, real_matrix_col);
+                                // )
+                                entry;
+                            });
+
+                        int const chunk_idx = chunk_col * procs_num_per_chunk_along_k + chunk_row;
+                        int const chunk_offset = chunk_col_offset * chunk_along_k_len + chunk_row_offset;
+
+                        // debug(
+                        //     printf("Placing entry %f in chunk no %i, at offset %i: B[%i]\n",
+                        //             entry, chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
+                        // )
+                        B[chunk_idx * chunk_size + chunk_offset] = entry;
+                    }
+                }
             }
         }
     }
@@ -562,7 +565,7 @@ struct Config
     void distribute_in_cannon_groups(f const* A_B_chunks, f *chunk, int const chunk_size) const {
         debug(
             if (is_cannon_group_leader)
-                print_array("A/B chunks for my cannon group", A_B_chunks, chunk_size * cannon_groups_num);
+                print_array("A/B chunks for my cannon group", A_B_chunks, chunk_size * cannon_group_size);
         )
         MPI_CHECK(MPI_Scatter(
             A_B_chunks,
