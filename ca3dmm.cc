@@ -15,6 +15,13 @@
 #define debug(x)
 #endif
 
+#ifdef NO_DECIMAL
+#undef NO_DECIMAL
+#define NO_DECIMAL true
+#else
+#define NO_DECIMAL false
+#endif
+
 using f = double;
 
 namespace {
@@ -59,7 +66,7 @@ inline void __check_mpi_error(const char *file, const int line, const int n)
 void print_array(char const *name, f const *arr, int const len) {
     printf("Array %s: \n", name);
     for (int i = 0; i < len; ++i) {
-        printf("%.1f ", arr[i]);
+        printf("%.0f ", arr[i]);
     }
     printf("\n");
 }
@@ -389,19 +396,27 @@ struct Config
     }
 
     void cannon_algorithm(f *A, f *B, f *C) const {
-        preskew_A(A);
-        debug(
-            print_array("A chunk after preskew", A, a_chunk_size);
-        )
-        preskew_B(B);
-        debug(
-            print_array("B chunk after preskew", B, b_chunk_size);
-        )
+        if (cannon_group_size > 1) {
+            preskew_A(A);
+            debug(
+                print_array("A chunk after preskew", A, a_chunk_size);
+            )
+            preskew_B(B);
+            debug(
+                print_array("B chunk after preskew", B, b_chunk_size);
+            )
+        }
         multiply_locally(A, B, C);
         for (int _shift = 1; _shift < cannon_group_dim; ++_shift) {
             // TODO: Init both async and wait for them
             cannon_step_A(A);
+            debug(
+                print_array("A chunk after cannon step", A, a_chunk_size);
+            )
             cannon_step_B(B);
+            debug(
+                print_array("B chunk after cannon step", B, b_chunk_size);
+            )
             multiply_locally(A, B, C);
         }
     }
@@ -417,15 +432,15 @@ struct Config
                 bool const out_of_bounds = r >= m || c >= k;
                 const f entry = out_of_bounds ?
                     ({
-                        debug(
-                            printf("Generating 0 for A[%i,%i]\n", real_matrix_row, real_matrix_col);
-                        )
+                        // debug(
+                        //     printf("Generating 0 for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        // )
                         0;
                     }) :
                     ({
-                        debug(
-                            printf("Generating entry for A[%i,%i]\n", real_matrix_row, real_matrix_col);
-                        )
+                        // debug(
+                        //     printf("Generating entry for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        // )
                         generate_double(seed, real_matrix_row, real_matrix_col);
                     });
 
@@ -436,10 +451,10 @@ struct Config
                 int const chunk_idx = chunk_col * p_m + chunk_row;
                 int const chunk_offset = chunk_row_offset * chunk_along_k_len + chunk_col_offset;
 
-                debug(
-                    printf("Placing entry in chunk no %i, at offset %i: A[%i]\n",
-                           chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
-                )
+                // debug(
+                //     printf("Placing entry in chunk no %i, at offset %i: A[%i]\n",
+                //            chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
+                // )
                 A[chunk_idx * chunk_size + chunk_offset] = entry;
             }
         }
@@ -577,9 +592,6 @@ struct Config
             0,
             cannon_group_comm
         ));
-        debug(
-            print_array("A/B chunk", chunk, chunk_size);
-        )
     }
 
     int compute_ge(f const* C_chunk, f const ge_val) const {
@@ -698,7 +710,11 @@ struct Config
                     // For elem in chunk row:
                     for (int i = 0; i < chunk_b_horizontal_len; ++i) {
                         // Print elem
-                        printf("%f ", chunk_row[i]);
+                        if (NO_DECIMAL) {
+                            printf("%3.0f ", chunk_row[i]);
+                        } else {
+                            printf("%f ", chunk_row[i]);
+                        }
                     }
                 }
             }
@@ -728,7 +744,11 @@ struct Config
         printf("%d %d\n", rows, cols);
         for (int i = 0; i < rows; ++i) {
             for (int j = 0; j < cols; ++j) {
-                printf("%f ", M[i][j]);
+                if (NO_DECIMAL) {
+                    printf("%3.0f ", M[i][j]);
+                } else {
+                    printf("%f ", M[i][j]);
+                }
             }
             printf("\n");
         }
@@ -747,9 +767,11 @@ struct Config
     // 5. Perform the Cannon's algorithm in each Cannon group and in each of the pk groups to get Ci.
     // 6. Reduce C=∑ki=1Ci.
 
-        // if (global_rank == 0) {
-        //     print();
-        // }
+        debug(
+            if (global_rank == 0) {
+                print();
+            }
+        )
 
         /* Distribute to pk groups */
         int const pk_group_vals_a = pillars_per_pk_group * m_padded;
@@ -830,18 +852,20 @@ struct Config
                 fprintf(stderr, "GE MISMATCH!: rank %i, expected=%i, computed=%i\n", global_rank, expected, computed);
             }
         } else if (verbose) {
-            debug({
-                printf("A matrix:\n");
-                print_expected_matrix(expected_A);
+            if (global_rank == 0) {
+                // debug({
+                    printf("A matrix:\n");
+                    print_expected_matrix(expected_A);
 
-                printf("B matrix:\n");
-                print_expected_matrix(expected_B);
+                    printf("B matrix:\n");
+                    print_expected_matrix(expected_B);
+                // })
+                    printf("Expected matrix:\n");
+                    print_expected_matrix(expected_C);
 
-                printf("Expected matrix:\n");
-                print_expected_matrix(expected_C);
-
-                printf("Computed matrix:\n");
-            })
+                    printf("Computed matrix:\n");
+                // })
+            }
             print_result_matrix(C_chunk.get());
         }
     }
@@ -948,12 +972,14 @@ int main(int argc, char *argv[])
 
     // Print the parsed values
     debug(
-        std::cout << "n: " << n << '\n';
-        std::cout << "m: " << m << '\n';
-        std::cout << "k: " << k << '\n';
-        std::cout << "seeds: " << seeds << '\n';
-        std::cout << "ge_value: " << ge_value << '\n';
-        std::cout << "verbose: " << std::boolalpha << verbose << '\n';
+        if (rank == 0) {
+            std::cout << "n: " << n << '\n';
+            std::cout << "m: " << m << '\n';
+            std::cout << "k: " << k << '\n';
+            std::cout << "seeds: " << seeds << '\n';
+            std::cout << "ge_value: " << ge_value << '\n';
+            std::cout << "verbose: " << std::boolalpha << verbose << '\n';
+        }
     )
 
     if (seeds != nullptr)
