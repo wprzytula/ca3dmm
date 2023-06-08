@@ -893,7 +893,7 @@ int main(int argc, char *argv[])
     MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
 
     static char const *const delim = ",";
-    char *token;
+    char *token = nullptr;
 
     int n = 0, m = 0, k = 0;
 
@@ -956,7 +956,8 @@ int main(int argc, char *argv[])
         std::cout << "verbose: " << std::boolalpha << verbose << '\n';
     )
 
-    token = std::strtok(seeds, delim);
+    if (seeds != nullptr)
+        token = std::strtok(seeds, delim);
 
     while (token != nullptr)
     {
