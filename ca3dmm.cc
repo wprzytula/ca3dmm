@@ -424,13 +424,11 @@ struct Config
 
 /* MATRIX GENERATION AND DISTRIBUTION */
     void generate_matrix_A_part(f *A, int const seed, int const pk_group_idx) const {
-        int const chunk_size = chunk_a_vertical_len * chunk_along_k_len;
-
         for (int r = 0; r < m_padded; r++) {
             for (int c = 0; c < pillars_per_pk_group; c++) {
                 int const real_matrix_row = r;
                 int const real_matrix_col = pk_group_idx * pillars_per_pk_group + c;
-                bool const out_of_bounds = r >= m || c >= k;
+                bool const out_of_bounds = real_matrix_row >= m || real_matrix_col >= k;
                 const f entry = out_of_bounds ?
                     ({
                         // debug(
@@ -456,7 +454,7 @@ struct Config
                 //     printf("Placing entry in chunk no %i, at offset %i: A[%i]\n",
                 //            chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
                 // )
-                A[chunk_idx * chunk_size + chunk_offset] = entry;
+                A[chunk_idx * a_chunk_size + chunk_offset] = entry;
             }
         }
     }
