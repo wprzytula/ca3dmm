@@ -79,6 +79,7 @@ struct Config
     int p, p_n, p_m, p_k, p_all;
     int n_padded, m_padded, k_padded;
 
+    int pk_group_procs_num = -1;
     int pk_groups_num = -1;
     int procs_num_per_chunk_along_k = -1;
     int pillars_per_pk_group = -1;
@@ -168,7 +169,7 @@ struct Config
         /* P_k groups config & intracommunication */
 
         pk_groups_num = p_k;
-        int const pk_group_procs_num = p_m * p_n;
+        pk_group_procs_num = p_m * p_n;
 
         chunk_a_vertical_len = norem_div(m_padded, p_m);
         chunk_b_horizontal_len = norem_div(n_padded, p_n);
@@ -287,7 +288,7 @@ struct Config
         printf("\n\tCONFIG:" SEP "\tGLOBAL:" SEP "n=%i," SEP "m=%i," SEP "k=%i," SEP "p=%i" SEP "--->" SEP "p_m=%i," SEP "p_n=%i," SEP "p_k=%i," SEP "p_all=%i" SEP
                "(prod:%i, sum: %i)," SEP
                "k_padded=%i," SEP "m_padded=%i," SEP "n_padded=%i," SEP
-               "pillars_per_pk_group=%i," SEP "pk_group_size=%i," SEP
+               "pk_groups_num=%i, " SEP "pk_group_procs_num=%i," SEP "pillars_per_pk_group=%i," SEP "pk_group_size=%i," SEP
                "cannon_groups_num=%i," SEP "cannon_group_size=%i," SEP
                "procs_num_per_chunk_along_k=%i," SEP "chunk_a_vertical_len=%i," SEP "chunk_b_horizontal_len=%i," SEP "chunk_along_k_len=%i," SEP
                "\tLOCAL:" SEP "global_rank=%i," SEP "gidx=%i," SEP "pk_group_rank=%i," SEP "cannon_group_rank=%i," SEP
@@ -296,7 +297,7 @@ struct Config
                n, m, k, p, p_m, p_n, p_k, p_all,
                p_n * p_m * p_k, minimised_sum(m, n, k, p_m, p_n, p_k),
                k_padded, m_padded, n_padded,
-               pillars_per_pk_group, pk_group_size,
+               pk_groups_num, pk_group_procs_num, pillars_per_pk_group, pk_group_size,
                cannon_groups_num, cannon_group_size,
                procs_num_per_chunk_along_k, chunk_a_vertical_len, chunk_b_horizontal_len, chunk_along_k_len,
                global_rank, gidx, pk_group_rank, cannon_group_rank,
