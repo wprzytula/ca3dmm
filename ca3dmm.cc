@@ -75,6 +75,19 @@ void print_array(char const *name, f const *arr, int const len) {
     printf("\n");
 }
 
+struct Config;
+
+struct Mem {
+    Config const& conf;
+    std::unique_ptr<f[]> A_chunk;
+    std::unique_ptr<f[]> B_chunk;
+    std::unique_ptr<f[]> C_chunk;
+    std::unique_ptr<f[]> A_B_chunks;
+
+    Mem(Config const& conf);
+    void clean_C();
+};
+
 struct Config
 {
     bool unused;
@@ -761,7 +774,7 @@ struct Config
     }
 
 /* COMPLETE ALGORITHM */
-    void multiply(int const seed_a, int const seed_b, bool const verbose,
+    void multiply(Mem &mem, int const seed_a, int const seed_b, bool const verbose,
                   bool const ge, double const ge_value) const
     {
     // Algorithm:
@@ -773,20 +786,15 @@ struct Config
     // 5. Perform the Cannon's algorithm in each Cannon group and in each of the pk groups to get Ci.
     // 6. Reduce C=∑ki=1Ci.
 
+        // Fill C with zeros
+        mem.clean_C();
+
         /* Distribute to pk groups */
         int const pk_group_vals_a = pillars_per_pk_group * m_padded;
         int const pk_group_vals_b = pillars_per_pk_group * n_padded;
 
-        std::unique_ptr<f[]> A_B_chunks;
-        if (is_cannon_group_leader) {
-            A_B_chunks = std::make_unique<f[]>(std::max(pk_group_vals_a, pk_group_vals_b));
-        }
-        std::unique_ptr<f[]> A_chunk{new f[a_chunk_size]};
-        std::unique_ptr<f[]> B_chunk{new f[b_chunk_size]};
-        std::unique_ptr<f[]> C_chunk{new f[c_chunk_size]()};
-
         {
-            f *chunks = A_B_chunks.get();
+            f *chunks = mem.A_B_chunks.get();
             bool const cannon_groups_placed_horizontally = p_m < p_n;
 
             distribute_A_to_pk_groups(chunks, seed_a);
@@ -797,9 +805,9 @@ struct Config
                     distribute_among_cannon_groups(chunks, pk_group_vals_a / cannon_groups_num);
                 }
             }
-            distribute_in_cannon_groups(chunks, A_chunk.get(), a_chunk_size);
+            distribute_in_cannon_groups(chunks, mem.A_chunk.get(), a_chunk_size);
             debug(
-                printf("p%i: ", global_rank); print_array("A chunk", A_chunk.get(), a_chunk_size);
+                printf("p%i: ", global_rank); print_array("A chunk", mem.A_chunk.get(), a_chunk_size);
             )
 
             distribute_B_to_pk_groups(chunks, seed_b);
@@ -810,22 +818,22 @@ struct Config
                     distribute_among_cannon_groups(chunks, pk_group_vals_b / cannon_groups_num);
                 }
             }
-            distribute_in_cannon_groups(chunks, B_chunk.get(), b_chunk_size);
+            distribute_in_cannon_groups(chunks, mem.B_chunk.get(), b_chunk_size);
             debug(
 
-                printf("p%i: ", global_rank); print_array("B chunk", B_chunk.get(), b_chunk_size);
+                printf("p%i: ", global_rank); print_array("B chunk", mem.B_chunk.get(), b_chunk_size);
             )
         }
 
 
         /* Perform Cannon algorithm */
-        cannon_algorithm(A_chunk.get(), B_chunk.get(), C_chunk.get());
+        cannon_algorithm(mem.A_chunk.get(), mem.B_chunk.get(), mem.C_chunk.get());
 
         /* Reduce matrix C to pk_group 0. */
         if (pk_groups_num > 1) {
             MPI_CHECK(MPI_Allreduce(
                 MPI_IN_PLACE,
-                C_chunk.get(),
+                mem.C_chunk.get(),
                 c_chunk_size,
                 MPI_DOUBLE,
                 MPI_SUM,
@@ -839,7 +847,7 @@ struct Config
         auto const expected_C = compute_expected_C(expected_A, expected_B);
 
         if (ge) {
-            int const computed = compute_ge(C_chunk.get(), ge_value);
+            int const computed = compute_ge(mem.C_chunk.get(), ge_value);
             int const expected = expected_ge(expected_C, ge_value);
             if (computed == expected ) {
                 if (global_rank == 0) {
@@ -866,10 +874,30 @@ struct Config
                     printf("Computed matrix:\n");
                 // })
             }
-            print_result_matrix(C_chunk.get());
+            print_result_matrix(mem.C_chunk.get());
         }
     }
 };
+
+Mem::Mem(Config const& conf) :
+    conf{conf},
+    A_chunk{new f[conf.a_chunk_size]},
+    B_chunk{new f[conf.b_chunk_size]},
+    C_chunk{new f[conf.c_chunk_size]},
+    A_B_chunks{({
+            int const pk_group_vals_a = conf.pillars_per_pk_group * conf.m_padded;
+            int const pk_group_vals_b = conf.pillars_per_pk_group * conf.n_padded;
+            std::unique_ptr<f[]> up;
+            if (conf.is_cannon_group_leader) {
+                up = std::make_unique<f[]>(std::max(pk_group_vals_a, pk_group_vals_b));
+            }
+            std::move(up);
+        })} {}
+
+void Mem::clean_C() {
+    std::memset(C_chunk.get(), 0, conf.c_chunk_size * sizeof(f));
+}
+
 } // namespace
 
 #ifdef TEST
@@ -970,12 +998,6 @@ int main(int argc, char *argv[])
     k = std::stoi(argv[optind++]);
 
     Config const conf{n, m, k, p, rank};
-    if (conf.unused) {
-        goto end;
-    }
-    if (print_config && rank == 0) {
-        conf.print();
-    }
 
     // Print the parsed values
     debug(
@@ -989,30 +1011,38 @@ int main(int argc, char *argv[])
         }
     )
 
-    if (seeds != nullptr)
-        token = std::strtok(seeds, delim);
+    if (print_config && rank == 0) {
+        conf.print();
+    }
 
-    while (token != nullptr)
-    {
-        int first = std::stoi(token);
+    if (!conf.unused) {
+        Mem mem{conf};
 
-        token = std::strtok(nullptr, delim);
-        if (token != nullptr)
+        if (seeds != nullptr)
+            token = std::strtok(seeds, delim);
+
+        while (token != nullptr)
         {
-            int second = std::stoi(token);
-
-            debug(
-                std::cout << "Pair: " << first << delim << second << std::endl;
-            )
-            conf.multiply(first, second, verbose, !!ge_value_str, ge_value);
+            int first = std::stoi(token);
 
             token = std::strtok(nullptr, delim);
-        }
-        else
-        {
-            std::cerr << "Odd number of seeds. Unpaired: " << first << '\n';
-            MPI_CHECK(MPI_Finalize());
-            return 1;
+            if (token != nullptr)
+            {
+                int second = std::stoi(token);
+
+                debug(
+                    std::cout << "Pair: " << first << delim << second << std::endl;
+                )
+                conf.multiply(mem, first, second, verbose, !!ge_value_str, ge_value);
+
+                token = std::strtok(nullptr, delim);
+            }
+            else
+            {
+                std::cerr << "Odd number of seeds. Unpaired: " << first << '\n';
+                MPI_CHECK(MPI_Finalize());
+                return 1;
+            }
         }
     }
 
