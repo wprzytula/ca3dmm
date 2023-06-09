@@ -862,18 +862,18 @@ struct Config
             }
         } else if (verbose) {
             if (global_rank == 0) {
-                // debug({
+                debug({
                     printf("A matrix:\n");
                     print_expected_matrix(expected_A);
 
                     printf("B matrix:\n");
                     print_expected_matrix(expected_B);
-                // })
+
                     printf("Expected matrix:\n");
                     print_expected_matrix(expected_C);
 
                     printf("Computed matrix:\n");
-                // })
+                })
             }
             print_result_matrix(mem.C_chunk.get());
         }
