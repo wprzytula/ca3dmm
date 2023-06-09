@@ -11,8 +11,10 @@
 
 #ifdef PRINT
 #define debug(x) x
+#define DEBUG_INT(var) printf(#var "=%i\n", var)
 #else
 #define debug(x)
+#define DEBUG_INT(var)
 #endif
 
 #ifdef NO_DECIMAL
@@ -21,6 +23,8 @@
 #else
 #define NO_DECIMAL false
 #endif
+
+
 
 using f = double;
 
