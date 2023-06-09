@@ -163,7 +163,7 @@ struct Config
 
         m_padded = pad(m, p_m);
         n_padded = pad(n, p_n);
-        k_padded = pad(k, p_k);
+        // k_padded = pad(k, p_k);
 
 
         /* P_k groups config & intracommunication */
@@ -174,7 +174,7 @@ struct Config
         chunk_a_vertical_len = norem_div(m_padded, p_m);
         chunk_b_horizontal_len = norem_div(n_padded, p_n);
         procs_num_per_chunk_along_k = norem_div(pk_group_procs_num, std::max(p_m, p_n));
-        // k_padded = pad(k, p_k * procs_num_per_chunk_along_k);
+        k_padded = pad(k, p_k * procs_num_per_chunk_along_k);
         pillars_per_pk_group = norem_div(k_padded, p_k);
         chunk_along_k_len = norem_div(pillars_per_pk_group, procs_num_per_chunk_along_k);
         a_chunk_size = chunk_a_vertical_len * chunk_along_k_len;
