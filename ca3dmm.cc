@@ -509,7 +509,7 @@ struct Config
     ) const {
         if (global_rank == 0) {
             for (int pk_group_idx = 1; pk_group_idx < p_k; ++pk_group_idx) {
-                generate_matrix_A_part(A_B_chunks, seed, pk_group_idx);
+                (this->*generate)(A_B_chunks, seed, pk_group_idx);
                 MPI_CHECK(MPI_Send(
                     A_B_chunks,
                     pk_group_vals,
