@@ -633,7 +633,6 @@ struct Config
             );
         )
 
-        // TODO: fix case: --np 2 build/ca3dmm 6 6 6 -s 3,2 -g 55
         int count = 0;
         for (int i = 0; i < chunk_a_vertical_len; ++i) {
             if (chunk_row_offset + i >= m) break; // out of bounds
@@ -782,7 +781,7 @@ struct Config
 
 /* COMPLETE ALGORITHM */
     void multiply(Mem &mem, int const seed_a, int const seed_b, bool const verbose,
-                  bool const ge, double const ge_value) const
+                  bool const ge, double const ge_value, bool const check_expected) const
     {
     // Algorithm:
     // 2. Organize processes into pk groups, each group has pm×pn processes.
@@ -849,23 +848,26 @@ struct Config
         }
         // At this point, the whole C is distributed among all pk_groups.
 
-        auto const expected_A = populate_A(seed_a);
-        auto const expected_B = populate_B(seed_b);
-        auto const expected_C = compute_expected_C(expected_A, expected_B);
-
         if (ge) {
             int const computed = compute_ge(mem.C_chunk.get(), ge_value);
-            int const expected = expected_ge(expected_C, ge_value);
-            if (computed == expected ) {
-                if (global_rank == 0) {
-                    debug(
-                        printf("computed ge=%i\n", computed);
-                    )
-                    printf("%i\n", computed);
+            if (global_rank == 0) {
+                if (check_expected) {
+                    auto const expected_A = populate_A(seed_a);
+                    auto const expected_B = populate_B(seed_b);
+                    auto const expected_C = compute_expected_C(expected_A, expected_B);
+                    int const expected = expected_ge(expected_C, ge_value);
+                    if (computed == expected ) {
+                        if (global_rank == 0) {
+                            debug(
+                                printf("computed ge=%i\n", computed);
+                            )
+                        }
+                    } else {
+                        fprintf(stderr, "GE MISMATCH!: rank %i, expected=%i, computed=%i\n", global_rank, expected, computed);
+                        exit(1);
+                    }
                 }
-            } else {
-                fprintf(stderr, "GE MISMATCH!: rank %i, expected=%i, computed=%i\n", global_rank, expected, computed);
-                exit(1);
+                printf("%i\n", computed);
             }
         } else if (verbose) {
             if (global_rank == 0) {
@@ -939,7 +941,7 @@ int main(int argc, char *argv[])
 #else
 static void usage(char const *progname)
 {
-    std::cerr << "Usage: " << progname << " n m k -s seeds [-g ge_value] [-v] [-c]\n";
+    std::cerr << "Usage: " << progname << " n m k -s seeds [-g ge_value] [-v] [-c] [-x]\n";
 }
 
 int main(int argc, char *argv[])
@@ -960,10 +962,11 @@ int main(int argc, char *argv[])
     char *seeds = nullptr, *ge_value_str = nullptr;
     bool verbose = false;
     bool print_config = false;
+    bool check_expected = false;
 
     int option;
     // Process command-line arguments using getopt
-    while ((option = getopt(argc, argv, "s:g:vc")) != -1)
+    while ((option = getopt(argc, argv, "s:g:vcx")) != -1)
     {
         switch (option)
         {
@@ -978,6 +981,9 @@ int main(int argc, char *argv[])
             break;
         case 'c':
             print_config = true;
+            break;
+        case 'x':
+            check_expected = true;
             break;
         default:
             usage(argv[0]);
@@ -1041,7 +1047,7 @@ int main(int argc, char *argv[])
                 debug(
                     std::cout << "Pair: " << first << delim << second << std::endl;
                 )
-                conf.multiply(mem, first, second, verbose, !!ge_value_str, ge_value);
+                conf.multiply(mem, first, second, verbose, !!ge_value_str, ge_value, check_expected);
 
                 token = std::strtok(nullptr, delim);
             }
