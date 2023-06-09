@@ -289,7 +289,9 @@ struct Config
 #define SEP "\n"
     void print() const
     {
-        printf("\n\tCONFIG:" SEP "\tGLOBAL:" SEP "n=%i," SEP "m=%i," SEP "k=%i," SEP "p=%i" SEP "--->" SEP "p_m=%i," SEP "p_n=%i," SEP "p_k=%i," SEP "p_all=%i" SEP
+        fprintf(stderr,
+               "\n\tCONFIG:" SEP "\tGLOBAL:" SEP "n=%i," SEP "m=%i," SEP "k=%i," SEP "p=%i" SEP "--->" SEP
+               "p_m=%i," SEP "p_n=%i," SEP "p_k=%i," SEP "p_all=%i" SEP
                "(prod:%i, sum: %i)," SEP
                "k_padded=%i," SEP "m_padded=%i," SEP "n_padded=%i," SEP
                "pk_groups_num=%i, " SEP "pk_group_procs_num=%i," SEP "pillars_per_pk_group=%i," SEP "pk_group_size=%i," SEP
@@ -771,12 +773,6 @@ struct Config
     // 5. Perform the Cannon's algorithm in each Cannon group and in each of the pk groups to get Ci.
     // 6. Reduce C=∑ki=1Ci.
 
-        debug(
-            if (global_rank == 0) {
-                print();
-            }
-        )
-
         /* Distribute to pk groups */
         int const pk_group_vals_a = pillars_per_pk_group * m_padded;
         int const pk_group_vals_b = pillars_per_pk_group * n_padded;
@@ -907,7 +903,7 @@ int main(int argc, char *argv[])
 #else
 static void usage(char const *progname)
 {
-    std::cerr << "Usage: " << progname << " n m k -s seeds [-g ge_value] [-v]\n";
+    std::cerr << "Usage: " << progname << " n m k -s seeds [-g ge_value] [-v] [-c]\n";
 }
 
 int main(int argc, char *argv[])
@@ -927,10 +923,11 @@ int main(int argc, char *argv[])
 
     char *seeds = nullptr, *ge_value_str = nullptr;
     bool verbose = false;
+    bool print_config = false;
 
     int option;
     // Process command-line arguments using getopt
-    while ((option = getopt(argc, argv, "s:g:v")) != -1)
+    while ((option = getopt(argc, argv, "s:g:vc")) != -1)
     {
         switch (option)
         {
@@ -942,6 +939,9 @@ int main(int argc, char *argv[])
             break;
         case 'v':
             verbose = true;
+            break;
+        case 'c':
+            print_config = true;
             break;
         default:
             usage(argv[0]);
@@ -972,6 +972,9 @@ int main(int argc, char *argv[])
     Config const conf{n, m, k, p, rank};
     if (conf.unused) {
         goto end;
+    }
+    if (print_config && rank == 0) {
+        conf.print();
     }
 
     // Print the parsed values
