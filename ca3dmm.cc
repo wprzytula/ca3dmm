@@ -103,7 +103,8 @@ struct Config
     int gidx = -1;
 
     int global_rank, pk_group_rank = -1, cannon_group_rank = -1;
-    MPI_Comm pk_group_comm, cannon_group_comm, pk_groups_leaders_comm, cannon_groups_leaders_comm, pk_group_counterparts_comm;
+    MPI_Comm used_comm, pk_group_comm, cannon_group_comm, pk_groups_leaders_comm,
+             cannon_groups_leaders_comm, pk_group_counterparts_comm;
     int pk_group_size = -1, cannon_group_size = -1, cannon_group_dim = -1;
     int cannon_groups_num = -1;
     int cannon_coords[2];
@@ -200,6 +201,12 @@ struct Config
 
         gidx = global_rank / pk_group_procs_num;
 
+        MPI_CHECK(MPI_Comm_split(
+            MPI_COMM_WORLD,
+            global_rank < p_all ? 0 : MPI_UNDEFINED,
+            global_rank,
+            &used_comm
+        ));
         if (unused) {
             debug(
                 printf("Process %i: unused, early return.", global_rank);
@@ -208,7 +215,7 @@ struct Config
         }
 
         MPI_CHECK(MPI_Comm_split(
-            MPI_COMM_WORLD,
+            used_comm,
             global_rank < p_all ? gidx : MPI_UNDEFINED,
             global_rank,
             &pk_group_comm
@@ -256,7 +263,7 @@ struct Config
         /* Matrix parts distribution communication */
         bool const is_pk_group_leader = global_rank % pk_group_size == 0;
         MPI_CHECK(MPI_Comm_split(
-            MPI_COMM_WORLD,
+            used_comm,
             is_pk_group_leader,
             global_rank,
             &pk_groups_leaders_comm
@@ -272,7 +279,7 @@ struct Config
 
         is_cannon_group_leader = global_rank % cannon_group_size == 0;
         MPI_CHECK(MPI_Comm_split(
-            MPI_COMM_WORLD,
+            used_comm,
                 // all non-leaders get color 0, all leaders get color equal to idx of their pk_group.
             is_cannon_group_leader ? (global_rank / pk_group_size) : MPI_UNDEFINED,
             global_rank,
@@ -286,7 +293,7 @@ struct Config
 
         /* Results reduction communication */
         MPI_CHECK(MPI_Comm_split(
-            MPI_COMM_WORLD,
+            used_comm,
             global_rank % pk_group_size,
             global_rank,
             &pk_group_counterparts_comm
@@ -645,7 +652,7 @@ struct Config
             1,
             MPI_INT,
             MPI_SUM,
-            MPI_COMM_WORLD
+            used_comm
         ));
 
         // Now, `count` contains the answer.
