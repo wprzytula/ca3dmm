@@ -858,6 +858,7 @@ struct Config
                 }
             } else {
                 fprintf(stderr, "GE MISMATCH!: rank %i, expected=%i, computed=%i\n", global_rank, expected, computed);
+                exit(1);
             }
         } else if (verbose) {
             if (global_rank == 0) {
