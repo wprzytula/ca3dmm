@@ -431,16 +431,17 @@ struct Config
                 bool const out_of_bounds = real_matrix_row >= m || real_matrix_col >= k;
                 const f entry = out_of_bounds ?
                     ({
-                        // debug(
-                        //     printf("Generating 0 for A[%i,%i]\n", real_matrix_row, real_matrix_col);
-                        // )
+                        debug(
+                            printf("Generating 0 for A[%i,%i]\n", real_matrix_row, real_matrix_col);
+                        )
                         0;
                     }) :
                     ({
-                        // debug(
-                        //     printf("Generating entry for A[%i,%i]\n", real_matrix_row, real_matrix_col);
-                        // )
-                        generate_double(seed, real_matrix_row, real_matrix_col);
+                        f const entry = generate_double(seed, real_matrix_row, real_matrix_col);
+                        debug(
+                            printf("Generating entry=%3.0f for A[%i,%i]\n", entry, real_matrix_row, real_matrix_col);
+                        )
+                        entry;
                     });
 
                 int const chunk_col = c / chunk_along_k_len;
@@ -473,27 +474,27 @@ struct Config
 
                         const f entry = out_of_bounds ?
                             ({
-                                // debug(
-                                //     printf("Generating 0 for B[%i,%i]\n", real_matrix_row, real_matrix_col);
-                                // )
+                                debug(
+                                    printf("Generating 0 for B[%i,%i]\n", real_matrix_row, real_matrix_col);
+                                )
                                 0;
                             }) :
                             ({
                                 f const entry = generate_double(seed, real_matrix_row, real_matrix_col);
-                                // debug(
-                                //     printf("Generating entry=%3.0f for B[%i,%i]\n", entry, real_matrix_row, real_matrix_col);
-                                // )
+                                debug(
+                                    printf("Generating entry=%3.0f for B[%i,%i]\n", entry, real_matrix_row, real_matrix_col);
+                                )
                                 entry;
                             });
 
                         int const chunk_idx = chunk_col * procs_num_per_chunk_along_k + chunk_row;
                         int const chunk_offset = chunk_col_offset * chunk_along_k_len + chunk_row_offset;
 
-                        // debug(
-                        //     printf("Placing entry %f in chunk no %i, at offset %i: B[%i]\n",
-                        //             entry, chunk_idx, chunk_offset, chunk_idx * chunk_size + chunk_offset);
-                        // )
-                        B[chunk_idx * chunk_size + chunk_offset] = entry;
+                        debug(
+                            printf("Placing entry %.0f in chunk no %i, at offset %i: B[%i]\n",
+                                    entry, chunk_idx, chunk_offset, chunk_idx * b_chunk_size + chunk_offset);
+                        )
+                        B[chunk_idx * b_chunk_size + chunk_offset] = entry;
                     }
                 }
             }
