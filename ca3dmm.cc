@@ -753,6 +753,11 @@ struct Config
                 if (global_rank == 0) {
                     // For elem in chunk row:
                     for (int i = 0; i < chunk_b_horizontal_len; ++i) {
+                        int const real_matrix_col = chunk_col_idx * chunk_b_horizontal_len + i;
+                        if (real_matrix_col >= n) {
+                            break;
+                        }
+
                         // Print elem
                         if (NO_DECIMAL) {
                             printf("%3.0f ", chunk_row[i]);
