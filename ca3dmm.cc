@@ -606,7 +606,7 @@ struct Config
                 A_B_chunks,
                 cannon_group_chunks_size,
                 MPI_DOUBLE,
-                A_B_chunks,
+                pk_group_rank == 0 ? MPI_IN_PLACE : A_B_chunks,
                 cannon_group_chunks_size,
                 MPI_DOUBLE,
                 0,
