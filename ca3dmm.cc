@@ -103,8 +103,9 @@ struct Config
     int gidx = -1;
 
     int global_rank, pk_group_rank = -1, cannon_group_rank = -1;
-    MPI_Comm used_comm, pk_group_comm, cannon_group_comm, pk_groups_leaders_comm,
-             cannon_groups_leaders_comm, pk_group_counterparts_comm;
+    MPI_Comm used_comm, first_pk_group_comm, pk_group_comm, cannon_group_comm,
+             pk_groups_leaders_comm, cannon_groups_leaders_comm,
+             pk_group_counterparts_comm;
     int pk_group_size = -1, cannon_group_size = -1, cannon_group_dim = -1;
     int cannon_groups_num = -1;
     int cannon_coords[2];
@@ -227,6 +228,17 @@ struct Config
         MPI_CHECK(MPI_Comm_set_errhandler(pk_group_comm, MPI_ERRORS_RETURN));
         MPI_CHECK(MPI_Comm_rank(pk_group_comm, &pk_group_rank));
 
+        MPI_CHECK(MPI_Comm_split(
+            used_comm,
+            gidx == 0 ? 0 : MPI_UNDEFINED,
+            global_rank,
+            &first_pk_group_comm
+        ));
+        if (first_pk_group_comm != MPI_COMM_NULL) {
+            int sz;
+            MPI_CHECK(MPI_Comm_size(first_pk_group_comm, &sz));
+            assert(pk_group_size == sz);
+        }
 
         /* Cannon groups config & intracommunication */
 
@@ -644,18 +656,25 @@ struct Config
             }
         }
 
-        // Reduce in pk_groups
-        MPI_CHECK(MPI_Allreduce(
-            MPI_IN_PLACE,
-            &count,
-            1,
-            MPI_INT,
-            MPI_SUM,
-            used_comm
-        ));
+
+        if (first_pk_group_comm != MPI_COMM_NULL) {
+            // Reduce in pk_group 0
+            MPI_CHECK(MPI_Reduce(
+                global_rank == 0 ? MPI_IN_PLACE : &count,
+                &count,
+                1,
+                MPI_INT,
+                MPI_SUM,
+                0,
+                first_pk_group_comm
+            ));
+        }
 
         // Now, `count` contains the answer.
-        return count;
+        if (global_rank == 0)
+            return count;
+        else
+            return -1;
     }
 
     std::vector<std::vector<f>> populate_A(int const seed_a) const {
@@ -837,16 +856,17 @@ struct Config
 
         /* Reduce matrix C to pk_group 0. */
         if (pk_groups_num > 1) {
-            MPI_CHECK(MPI_Allreduce(
-                MPI_IN_PLACE,
+            MPI_CHECK(MPI_Reduce(
+                gidx == 0 ? MPI_IN_PLACE : mem.C_chunk.get(),
                 mem.C_chunk.get(),
                 c_chunk_size,
                 MPI_DOUBLE,
                 MPI_SUM,
+                0,
                 pk_group_counterparts_comm
             ));
         }
-        // At this point, the whole C is distributed among all pk_groups.
+        // At this point, the whole C is distributed among pk_group 0.
 
         if (ge) {
             int const computed = compute_ge(mem.C_chunk.get(), ge_value);
